@@ -1,0 +1,62 @@
+# This file is a template, and might need editing before it works on your project.
+# Official language image. Look for the different tagged releases at:
+# https://hub.docker.com/r/library/python/tags/
+image: python:3.8
+
+variables:
+  # important for sub-modules
+  GIT_SUBMODULE_STRATEGY: recursive
+  # No LFS
+  GIT_LFS_SKIP_SMUDGE: "1"
+
+
+# the stages
+stages:
+  - build
+  - code-style
+  - static-code-checking
+  - tests
+
+before_script:
+  - which python3
+  - python3.8 -m venv /tmp/venv/${CI_PROJECT_ID}/${CI_COMMIT_REF_SLUG}
+  - source /tmp/venv/${CI_PROJECT_ID}/${CI_COMMIT_REF_SLUG}/bin/activate
+  - python -V
+  - which python
+
+venv:
+  stage: build
+  script:
+    - which pip
+    - pip install -U pip setuptools wheel
+    - pip install -U -r requirements.txt
+    - pip list
+  interruptible: true
+
+pylint-error:
+  stage: static-code-checking
+  script:
+    - cd src
+    - PYTHONPATH=. pylint --disable=all --enable=F,E arclus
+  interruptible: true
+
+pylint-other:
+  stage: static-code-checking
+  script:
+    - cd src
+    - PYTHONPATH=. pylint --disable=all --enable=W arclus
+  allow_failure: true
+  interruptible: true
+
+flake8:
+  stage: code-style
+  script:
+    - cd src
+    - PYTHONPATH=. flake8 --ignore=E501 arclus
+  interruptible: true
+
+test:
+  stage: tests
+  script:
+    - PYTHONPATH=./src pytest --durations=10 --workers=auto --cov=./src ./tests
+  interruptible: true
