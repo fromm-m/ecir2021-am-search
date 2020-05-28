@@ -6,12 +6,12 @@ class NegativeSampler:
 
     def __init__(
         self,
-        max_premise_id: int,
-        max_claim_id: int,
+        num_premises: int,
+        num_claims: int,
         num_neg_per_pos: int = 1,
     ):
         super().__init__()
-        self.max_ids = (max_claim_id, max_premise_id)
+        self.num = (num_claims, num_premises)
         self.num_neg_per_pos = num_neg_per_pos
 
     def sample(self, batch: torch.LongTensor, corrupt_premises: bool = True) -> torch.LongTensor:
@@ -29,6 +29,6 @@ class NegativeSampler:
         """
         col = 0 if corrupt_premises else 1
         batch_size = batch.shape[0]
-        corrupted = torch.randint(self.max_ids[col] - 1, size=(batch_size, self.num_neg_per_pos))
+        corrupted = torch.randint(self.num[col] - 1, size=(batch_size, self.num_neg_per_pos))
         corrupted += (corrupted >= batch[:, col]).long()
         return corrupted
