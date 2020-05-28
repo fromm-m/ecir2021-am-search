@@ -24,11 +24,11 @@ class NegativeSampler:
             Whether to corrupt premises, or claims.
 
         :return: shape: (batch_size, num_neg)
-            The negative samples, i.e. (batch[b, col], result[b, i]) is a negative sample, where col is 0 if
-            corrupt_premises else 1.
+            The negative samples, i.e. (batch[b, col], result[b, i]) is a negative sample, where col is 1 if
+            corrupt_premises else 0.
         """
-        col = 0 if corrupt_premises else 1
+        col = 1 if corrupt_premises else 0
         batch_size = batch.shape[0]
         corrupted = torch.randint(self.num[col] - 1, size=(batch_size, self.num_neg_per_pos))
-        corrupted += (corrupted >= batch[:, col]).long()
+        corrupted += (corrupted >= batch[:, col, None]).long()
         return corrupted
