@@ -37,7 +37,7 @@ pylint-error:
   stage: static-code-checking
   script:
     - cd src
-    - PYTHONPATH=. pylint --disable=all --enable=F,E arclus
+    - PYTHONPATH=. pylint --rcfile=../pylintrc.fatal arclus
   interruptible: true
 
 pylint-other:
