@@ -1,7 +1,7 @@
 import torch
 
 
-class MegativeSampler:
+class NegativeSampler:
     """Base class for negative sampling."""
 
     def __init__(
