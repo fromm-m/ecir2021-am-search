@@ -1,3 +1,6 @@
+"""
+Module for negative sampling.
+"""
 import torch
 
 
