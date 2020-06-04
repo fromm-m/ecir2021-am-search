@@ -58,5 +58,5 @@ flake8:
 test:
   stage: tests
   script:
-    - PYTHONPATH=./src pytest --durations=10 --workers=auto --cov=./src ./tests
+    - PYTHONPATH=./src pytest -m "not environment_test" --durations=10 --workers=auto --cov=./src ./tests
   interruptible: true
