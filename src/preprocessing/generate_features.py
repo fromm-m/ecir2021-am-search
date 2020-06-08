@@ -16,8 +16,7 @@ def main():
     # Connect to BERT-as-a-service
     client = BertClient()
 
-    for name, source_path, text_col_name in zip(
-        ('premises', 'claims'),
+    for source_path, text_col_name in zip(
         (PREP_CLAIMS, PREP_PREMISES),
         ('premise_text', 'claim_text'),
     ):
