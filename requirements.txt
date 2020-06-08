@@ -1,3 +1,5 @@
+bert-serving-client>=1.10.0
+bert-serving-server>=1.10.0
 pandas>=1.0.4
 # code style
 flake8>=3.8.2
