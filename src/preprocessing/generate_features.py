@@ -7,7 +7,12 @@ import numpy
 import pandas
 from bert_serving.client import BertClient
 
-from arclus.settings import PREP_CLAIMS, PREP_PREMISES
+from arclus.settings import PREP_CLAIMS, PREP_PREMISES, PREP_ASSIGNMENTS, OUTPUT_FEATURES, CLAIMS_LENGTH, PREMISES_LENGTH
+
+
+def truncate(x: str) -> str:
+    a = x.split()[0:CLAIMS_LENGTH]
+    return " ".join(a)
 
 
 def main():
@@ -16,19 +21,22 @@ def main():
     # Connect to BERT-as-a-service
     client = BertClient()
 
-    for source_path, text_col_name in zip(
-        (PREP_CLAIMS, PREP_PREMISES),
-        ('premise_text', 'claim_text'),
-    ):
-        output_path = source_path.parent / source_path.name.replace('.csv', '.npy')
-        if output_path.is_file():
-            logging.info(f'Skipping existing file: {output_path}')
-            continue
-        df = pandas.read_csv(source_path, delimiter=',')
-        embeddings = client.encode(
-            texts=df[text_col_name].tolist(),
-        )
-        numpy.save(output_path, embeddings)
+    premises_df = pandas.read_csv(PREP_PREMISES, delimiter=",")
+    claims_df = pandas.read_csv(PREP_CLAIMS, delimiter=",")
+    ass_df = pandas.read_csv(PREP_ASSIGNMENTS, delimiter=",")
+    ass_extended = pandas.merge(ass_df, premises_df, how='inner', on="premise_id")
+    ass_extended = pandas.merge(ass_extended, claims_df, how='inner', on="claim_id")
+    ass_extended = ass_extended.drop(columns=['Unnamed: 0_x', 'Unnamed: 0_y', "Unnamed: 0"])
+
+    premises = ass_extended['premise_text']
+    claims = ass_extended['claim_text']
+    premises = premises.apply(truncate, args=PREMISES_LENGTH)
+    claims = claims.apply(truncate, args=CLAIMS_LENGTH)
+
+    pair = premises + ' ||| ' + claims
+    pair = list(pair.values.flatten())
+    embeddings = client.encode(texts=pair)
+    numpy.save(OUTPUT_FEATURES, embeddings)
 
 
 if __name__ == '__main__':
