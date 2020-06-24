@@ -11,8 +11,8 @@ from arclus.settings import PREP_CLAIMS, PREP_PREMISES, PREP_ASSIGNMENTS, OUTPUT
     PREMISES_LENGTH
 
 
-def truncate(x: str) -> str:
-    a = x.split()[0:CLAIMS_LENGTH]
+def truncate(x: str, limit: int) -> str:
+    a = x.split()[0:limit]
     return " ".join(a)
 
 
@@ -31,8 +31,8 @@ def main():
 
     premises = ass_extended['premise_text']
     claims = ass_extended['claim_text']
-    premises = premises.apply(truncate, args=PREMISES_LENGTH)
-    claims = claims.apply(truncate, args=CLAIMS_LENGTH)
+    premises = premises.apply(truncate, args=(PREMISES_LENGTH,))
+    claims = claims.apply(truncate, args=(CLAIMS_LENGTH,))
 
     pair = premises + ' ||| ' + claims
     pair = list(pair.values.flatten())
