@@ -7,7 +7,8 @@ import numpy
 import pandas
 from bert_serving.client import BertClient
 
-from arclus.settings import PREP_CLAIMS, PREP_PREMISES, PREP_ASSIGNMENTS, OUTPUT_FEATURES, CLAIMS_LENGTH, PREMISES_LENGTH
+from arclus.settings import PREP_CLAIMS, PREP_PREMISES, PREP_ASSIGNMENTS, OUTPUT_FEATURES, CLAIMS_LENGTH, \
+    PREMISES_LENGTH
 
 
 def truncate(x: str) -> str:
