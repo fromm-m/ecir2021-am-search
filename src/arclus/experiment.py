@@ -4,7 +4,6 @@ import os
 
 from typing import Dict, Any, Tuple
 
-import h5py as h5py
 import torch
 from mlflow.tracking import MlflowClient
 
@@ -68,14 +67,3 @@ class Experiment:
             'model_state_dict': model.base.model.state_dict(),
             'optimizer_state_dict': model.base.optimizer.state_dict(),
         }, data_path)
-
-    @staticmethod
-    def save_prediction(
-        path: str,
-        prediction,
-        overwrite=False
-    ):
-        h5_file_path = os.path.join(path, 'prediction.h5')
-        if not (os.path.isfile(h5_file_path)) or overwrite:
-            with h5py.File(h5_file_path, mode='w', libver='latest') as h5f:
-                h5f.create_dataset(name='data', data=prediction)
