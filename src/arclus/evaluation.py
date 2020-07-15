@@ -1,5 +1,5 @@
 from sklearn.metrics import f1_score
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import classification_report
 import torch
 
 

@@ -1,12 +1,11 @@
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import random
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.nn import CrossEntropyLoss, BCELoss, BCEWithLogitsLoss
-import torch.nn.functional as F
+from torch.nn import CrossEntropyLoss
 import torch
 
 from arclus.evaluation import accuracy
