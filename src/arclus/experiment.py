@@ -1,7 +1,6 @@
 import datetime
 import logging
 import os
-import pickle
 
 from typing import Dict, Any, Tuple
 
@@ -9,14 +8,14 @@ import h5py as h5py
 import torch
 from mlflow.tracking import MlflowClient
 
-from arclus.settings import DATA_TMP_EXPERIMENTS
+from arclus.settings import DATA_EXPERIMENTS
 
 
 class Experiment:
 
     def __init__(
         self,
-        root=DATA_TMP_EXPERIMENTS,
+        root=DATA_EXPERIMENTS,
         tracking_uri="http://mlflow.dbs.ifi.lmu.de:5000",
         exp_name="Test_ARCLUS"
     ):
