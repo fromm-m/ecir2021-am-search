@@ -16,8 +16,8 @@ class OutputFeatures(Dataset):
         """
         self.X_data_pos = np.load(OUTPUT_FEATURES)
         self.X_data_neg = np.load(OUTPUT_FEATURES_NEGATIVE)
-        self.y_data_pos = torch.tensor(np.array([1] * len(self.X_data_pos)))
-        self.y_data_neg = torch.tensor(np.array([0] * len(self.X_data_neg)))
+        self.y_data_pos = torch.ones(len(self.X_data_pos), dtype=torch.long)
+        self.y_data_neg = torch.zeros(len(self.X_data_neg), dtype=torch.long)
         self.X_data = np.concatenate((self.X_data_pos, self.X_data_neg))
         self.y_data = np.concatenate((self.y_data_pos, self.y_data_neg))
 

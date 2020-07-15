@@ -7,7 +7,7 @@ def accuracy(
     pred_y,
     labels,
     prob=True
-) -> torch.tensor:
+) -> torch.Tensor:
     if prob:
         _, pred_y = torch.max(pred_y, dim=1)
     return torch.tensor(torch.sum(pred_y == labels).item() / len(pred_y))

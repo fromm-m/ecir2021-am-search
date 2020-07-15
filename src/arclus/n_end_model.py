@@ -105,8 +105,8 @@ class TrainTestHandler:
 
     def predict(
         self,
-        x: torch.tensor
-    ) -> torch.tensor:
+        x: torch.Tensor
+    ) -> torch.Tensor:
         """
         Predict probability for each label.
         :param x: the data
@@ -132,8 +132,8 @@ class TrainTestHandler:
 
     def validation_step(
         self,
-        batch_x: torch.tensor,
-        batch_y: torch.tensor
+        batch_x: torch.Tensor,
+        batch_y: torch.Tensor
     ) -> dict:
         """
         Calculate loss and accuracy for a given batch.
