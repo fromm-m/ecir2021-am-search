@@ -1,10 +1,10 @@
 import logging
 from typing import Tuple
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-import numpy as np
 
 from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, VAL_SIZE
 
@@ -20,6 +20,17 @@ class OutputFeatures(Dataset):
         self.y_data_neg = torch.tensor(np.array([0] * len(self.X_data_neg)))
         self.X_data = np.concatenate((self.X_data_pos, self.X_data_neg))
         self.y_data = np.concatenate((self.y_data_pos, self.y_data_neg))
+
+    def info(self) -> dict:
+        n_neg, d_neg = self.X_data_neg.shape
+        n, d = self.X_data_pos.shape
+        info = {
+            'samples_total': n_neg + n,
+            'samples_neg': n_neg,
+            'samples_pos': n,
+            'feature_dim': d
+        }
+        return info
 
     def __getitem__(self, index):
         return self.X_data[index], self.y_data[index]
@@ -74,7 +85,7 @@ class DataSplit:
     def get_train_val_test_split(
         self,
         batch_size: int,
-        num_workers: int = 1
+        num_workers: int = 0
     ) -> Tuple[DataLoader, DataLoader, DataLoader]:
         """
         Split the data into train, validation and test set.
