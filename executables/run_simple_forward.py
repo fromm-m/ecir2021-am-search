@@ -2,10 +2,12 @@ import logging
 
 import torch
 
-from arclus.data_split import DataSplit, OutputFeatures
+from arclus.data.data_split import DataSplit, OutputFeatures
 from arclus.evaluation import class_metrics, f1_macro, accuracy
 from arclus.experiment import Experiment
-from arclus.n_end_model import NEndModel, set_random_seed, TrainTestHandler
+from arclus.models.n_end_model import NEndModel
+from arclus.models.train_test_handler import TrainTestHandler
+from arclus.utils import set_random_seed
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)

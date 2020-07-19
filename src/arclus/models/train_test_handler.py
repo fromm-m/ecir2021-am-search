@@ -1,23 +1,13 @@
 import logging
 from typing import Optional
 
-import numpy as np
-import random
-from torch import nn
-from torch.utils.data import DataLoader
-from torch.nn import CrossEntropyLoss
 import torch
+from torch import nn
+from torch.nn import CrossEntropyLoss
+from torch.utils.data import DataLoader
 
 from arclus.evaluation import accuracy
-
-
-def set_random_seed(seed: int):
-    """Set the random seed on numpy, torch, and python."""
-    return (
-        np.random.seed(seed=seed),
-        torch.manual_seed(seed=seed),
-        random.seed(seed),
-    )
+from arclus.utils import set_random_seed
 
 
 class TrainTestHandler:
@@ -160,30 +150,3 @@ class TrainTestHandler:
         batch_accs = [x['val_acc'] for x in outputs]
         avg_epoch_acc = torch.stack(batch_accs).mean()  # Avg over val accuracies
         return {'val_loss': avg_epoch_loss.item(), 'val_acc': avg_epoch_acc.item()}
-
-
-class NEndModel(nn.Module):
-    """
-    Simple MLP Model (Not-End-to-End-Model) with a single layer.
-    """
-
-    def __init__(
-        self,
-        input_shape: int,
-        out: int,
-        dropout_rate: float
-    ):
-        super().__init__()
-        self.model_name = "simple_forward"
-        self.l1 = nn.Linear(in_features=input_shape, out_features=out, bias=True)
-        self.dropout = nn.Dropout(dropout_rate)
-        self.sig = nn.Sigmoid()
-
-    def forward(self, x):
-        x = self.l1(x)
-        x = self.dropout(x)
-        x = self.sig(x)
-        return x
-
-    def get_model_name(self) -> str:
-        return self.model_name
