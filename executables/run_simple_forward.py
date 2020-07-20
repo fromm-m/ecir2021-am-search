@@ -50,10 +50,11 @@ if __name__ == '__main__':
         'task_name': 'SIM',
         'dropout_rate': dropout_rate,
     }
+    t_handler.train(train_loader, val_loader)
+
     if to_db:
         run_id, output_path = experiment.init_experiment(hyper_parameters=hyper_parameters)
-
-    t_handler.train(train_loader, val_loader)
+        experiment.save_model(output_path, t_handler.model, t_handler.optimizer)
 
     true_labels_test = torch.tensor([], dtype=torch.long)
     pred_probs_test = torch.tensor([])

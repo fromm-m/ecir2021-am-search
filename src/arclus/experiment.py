@@ -72,17 +72,19 @@ class Experiment:
     @staticmethod
     def save_model(
         path: str,
-        model: torch.nn.Module
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer
     ):
         """
         Save a torch model to given output path.
         :param path: The path.
         :param model: The model to save.
+        :param optimizer: The optimizer to save
         """
         data_path = os.path.join(path, 'checkpoint.pth.tar')
         torch.save(model, os.path.join(path, 'model.pth'))
 
         torch.save({
-            'model_state_dict': model.base.model.state_dict(),
-            'optimizer_state_dict': model.base.optimizer.state_dict(),
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
         }, data_path)
