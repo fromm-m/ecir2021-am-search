@@ -1,3 +1,6 @@
+"""
+Module for handling experiments.
+"""
 import datetime
 import logging
 import os
@@ -11,6 +14,7 @@ from arclus.settings import DATA_EXPERIMENTS
 
 
 class Experiment:
+    """Base class for initializing and finalizing experiments."""
 
     def __init__(
         self,
@@ -29,6 +33,11 @@ class Experiment:
         self,
         hyper_parameters: Dict[str, Any],
     ) -> Tuple[str, str]:
+        """
+        Initialising and experiment. Creates an experiment run and creates an output directory based on the run id.
+        :param hyper_parameters: The hyperparameters for this experiment to save in DB.
+        :return: The id of the experiment run and the created output path.
+        """
         current_run = self.client.create_run(self.experiment_id)
         self.client.log_param(run_id=current_run.info.run_id, key="create_time_utc",
                               value=datetime.datetime.now(tz=datetime.timezone.utc))
@@ -52,6 +61,11 @@ class Experiment:
         experiment_id: str,
         result: Dict[str, Any],
     ) -> None:
+        """
+        Finalise the experiment by saving high-level results in DB.
+        :param experiment_id: The id of the run to finalise.
+        :param result: The result metrics to save.
+        """
         for key in result.keys():
             self.client.log_metric(run_id=experiment_id, key=key, value=result[key])
 
@@ -60,6 +74,11 @@ class Experiment:
         path: str,
         model: torch.nn.Module
     ):
+        """
+        Save a torch model to given output path.
+        :param path: The path.
+        :param model: The model to save.
+        """
         data_path = os.path.join(path, 'checkpoint.pth.tar')
         torch.save(model, os.path.join(path, 'model.pth'))
 
