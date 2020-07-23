@@ -11,7 +11,7 @@ from arclus.data.data_split import PrecomputedPairwiseFeatures, split
 from arclus.evaluation import accuracy, f1_macro
 from arclus.experiment import Experiment
 from arclus.models.train_test_handler import TrainTestHandler
-from arclus.utils import set_random_seed
+from arclus.utils import set_random_seed, flatten_dict
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
@@ -88,4 +88,5 @@ if __name__ == '__main__':
     pprint.pprint(result)
 
     if to_db:
+        result = flatten_dict(result)
         experiment.finalise_experiment(experiment_id=run_id, result=result)
