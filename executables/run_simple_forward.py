@@ -1,11 +1,13 @@
 import logging
+import pprint
 
 import torch
+from torch import nn
+from torch.utils.data.dataloader import DataLoader
 
-from arclus.data.data_split import DataSplit, PrecomputedPairwiseFeatures
-from arclus.evaluation import class_metrics, f1_macro, accuracy
+from arclus.data.data_split import PrecomputedPairwiseFeatures, split
+from arclus.evaluation import accuracy, class_metrics, f1_macro
 from arclus.experiment import Experiment
-from arclus.models.n_end_model import NEndModel
 from arclus.models.train_test_handler import TrainTestHandler
 from arclus.utils import set_random_seed
 
@@ -27,16 +29,17 @@ if __name__ == '__main__':
     # prepare dataset split
     dataset = PrecomputedPairwiseFeatures()
     ds_info = dataset.info()
-    split = DataSplit(dataset, shuffle=True)
-    train_loader, val_loader, test_loader = split.get_train_val_test_split(batch_size=batch_size)
+    train_loader, val_loader, test_loader = [
+        DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+        for dataset in split(dataset=dataset)
+    ]
 
-    base_model = NEndModel(
-        input_shape=ds_info['feature_dim'],
-        out=2,
-        dropout_rate=dropout_rate,
-    )
-    optimizer = torch.optim.Adam(params=base_model.parameters())
+    base_model = nn.Sequential(
+        nn.Dropout(p=dropout_rate),
+        nn.Linear(in_features=ds_info['feature_dim'], out_features=1, bias=True),
+    ).to(device=device)
     print(base_model)
+    optimizer = torch.optim.Adam(params=base_model.parameters())
 
     t_handler = TrainTestHandler(base_model=base_model, optimizer=optimizer)
 
@@ -44,9 +47,9 @@ if __name__ == '__main__':
         'model_name': base_model.get_model_name(),
         'batch_size': batch_size,
         'random_seed': random_seed,
-        'num_train_samples': len(split.train_indices),
-        'num_test_samples': len(split.test_indices),
-        'num_val_samples': len(split.val_indices),
+        'num_train_samples': len(train_loader),
+        'num_test_samples': len(test_loader),
+        'num_val_samples': len(val_loader),
         'task_name': 'SIM',
         'dropout_rate': dropout_rate,
     }
@@ -56,49 +59,29 @@ if __name__ == '__main__':
         run_id, output_path = experiment.init_experiment(hyper_parameters=hyper_parameters)
         experiment.save_model(output_path, t_handler.model, t_handler.optimizer)
 
-    true_labels_test = torch.tensor([], dtype=torch.long)
-    pred_probs_test = torch.tensor([])
-    for batch in test_loader:
-        y = batch[1]
-        x = batch[0]
-        y_pred = t_handler.predict(x)
-        pred_probs_test = torch.cat([pred_probs_test, y_pred])
-        true_labels_test = torch.cat([true_labels_test, y])
+    result = dict()
+    for subset, loader in dict(
+        test=test_loader,
+        val=val_loader,
+    ).items():
+        y_true = []
+        y_score = []
+        for x, y in test_loader:
+            y_pred = t_handler.predict(x)
+            y_score.append(y_pred)
+            y_true.append(y)
+        y_score = torch.cat(y_score, dim=0)
+        y_true = torch.cat(y_true, dim=0)
 
-    true_labels_val = torch.tensor([], dtype=torch.long)
-    pred_probs_val = torch.tensor([])
-    for batch in test_loader:
-        y = batch[1]
-        x = batch[0]
-        y_pred = t_handler.predict(x)
-        pred_probs_val = torch.cat([pred_probs_val, y_pred])
-        true_labels_val = torch.cat([true_labels_val, y])
+        result[subset] = dict(
+            accuary=accuracy(pred_y=y_score, labels=y_true, prob=True),
+            f1_macro=f1_macro(pred_y=y_score, labels=y_true, prob=True),
+            metrics=class_metrics(pred_y=y_score, labels=y_true, prob=True),
+        )
 
-    test_acc = accuracy(pred_y=pred_probs_test, labels=true_labels_test, prob=True)
-    test_f1_macro = f1_macro(pred_y=pred_probs_test, labels=true_labels_test, prob=True)
-    metrics = class_metrics(pred_y=pred_probs_test, labels=true_labels_test, prob=True)
+    result['num_epochs'] = len(t_handler.history)
+    result['val_loss'] = t_handler.history[-1]
+    pprint.pprint(result)
 
-    val_acc = accuracy(pred_y=pred_probs_val, labels=true_labels_val, prob=True)
-    val_f1_macro = f1_macro(pred_y=pred_probs_val, labels=true_labels_val, prob=True)
-    val_metrics = class_metrics(pred_y=pred_probs_val, labels=true_labels_val, prob=True)
-
-    print(test_acc)
-    print(test_f1_macro)
-    print('TEST RESULT')
-    print(metrics)
-
-    print('VALIDATION RESULT')
-    print(val_metrics)
-
-    print(f'n of epochs: {len(t_handler.history)}')
-
-    result = {
-        'test_acc': float(test_acc),
-        'test_f1_macro': test_f1_macro,
-        'val_acc': float(val_acc),
-        'val_f1_macro': val_f1_macro,
-        'val_loss': t_handler.history[-1],
-        'number of epochs': len(t_handler.history)
-    }
     if to_db:
         experiment.finalise_experiment(experiment_id=run_id, result=result)

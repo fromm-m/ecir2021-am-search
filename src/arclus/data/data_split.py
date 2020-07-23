@@ -3,7 +3,7 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, VAL_SIZE
@@ -36,6 +36,30 @@ class PrecomputedPairwiseFeatures(Dataset):
 
     def __len__(self):
         return len(self.X_data)
+
+
+def split(
+    dataset: Dataset,
+    train_test_ratio: int = TRAIN_SIZE,
+    train_validation_ratio: int = VAL_SIZE,
+) -> Tuple[Dataset, Dataset, Dataset]:
+    """Split the dataset into train-validation-test."""
+    n_samples = len(dataset)
+    train_size = int(train_test_ratio * n_samples)
+    test_size = n_samples - train_size
+    train_size = int(train_validation_ratio * n_samples)
+    validation_size = n_samples - train_size - test_size
+    return random_split(dataset=dataset, lengths=[train_size, validation_size, test_size])
+
+
+def get_loader(
+    dataset: Dataset,
+    batch_size: int,
+    num_workers: int = 0,
+    shuffle: bool = True,
+) -> DataLoader:
+    """Get a data loader."""
+    return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
 
 
 class DataSplit:
