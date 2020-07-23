@@ -3,34 +3,33 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, VAL_SIZE
 
 
-class OutputFeatures(Dataset):
+class PrecomputedPairwiseFeatures(Dataset):
     def __init__(self):
         """
         Load positive and negative output features and generate labels (1 for positive, 0 for negative)
         """
-        self.X_data_pos = np.load(OUTPUT_FEATURES)
-        self.X_data_neg = np.load(OUTPUT_FEATURES_NEGATIVE)
-        self.y_data_pos = torch.ones(len(self.X_data_pos), dtype=torch.long)
-        self.y_data_neg = torch.zeros(len(self.X_data_neg), dtype=torch.long)
-        self.X_data = np.concatenate((self.X_data_pos, self.X_data_neg))
-        self.y_data = np.concatenate((self.y_data_pos, self.y_data_neg))
+        x_data_pos = np.load(OUTPUT_FEATURES)
+        x_data_neg = np.load(OUTPUT_FEATURES_NEGATIVE)
+        y_data_pos = torch.ones(len(x_data_pos), dtype=torch.long)
+        y_data_neg = torch.zeros(len(x_data_neg), dtype=torch.long)
+        self.X_data = np.concatenate((x_data_pos, x_data_neg))
+        self.y_data = np.concatenate((y_data_pos, y_data_neg))
 
     def info(self) -> dict:
-        n_neg, d_neg = self.X_data_neg.shape
-        n, d = self.X_data_pos.shape
-        info = {
-            'samples_total': n_neg + n,
-            'samples_neg': n_neg,
-            'samples_pos': n,
-            'feature_dim': d
-        }
-        return info
+        n_samples, dim = self.X_data.shape
+        n_pos = (self.y_data > 0).sum()
+        return dict(
+            samples_total=n_samples,
+            samples_neg=n_samples - n_pos,
+            samples_pos=n_pos,
+            feature_dim=dim,
+        )
 
     def __getitem__(self, index):
         return self.X_data[index], self.y_data[index]

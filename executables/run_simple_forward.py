@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-from arclus.data.data_split import DataSplit, OutputFeatures
+from arclus.data.data_split import DataSplit, PrecomputedPairwiseFeatures
 from arclus.evaluation import class_metrics, f1_macro, accuracy
 from arclus.experiment import Experiment
 from arclus.models.n_end_model import NEndModel
@@ -25,7 +25,7 @@ if __name__ == '__main__':
     # TODO: hyperparameter search?
 
     # prepare dataset split
-    dataset = OutputFeatures()
+    dataset = PrecomputedPairwiseFeatures()
     ds_info = dataset.info()
     split = DataSplit(dataset, shuffle=True)
     train_loader, val_loader, test_loader = split.get_train_val_test_split(batch_size=batch_size)
