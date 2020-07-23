@@ -1,10 +1,8 @@
-import logging
 from typing import Tuple
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
-from torch.utils.data.sampler import SubsetRandomSampler
 
 from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, VAL_SIZE
 
@@ -60,68 +58,3 @@ def get_loader(
 ) -> DataLoader:
     """Get a data loader."""
     return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-
-
-class DataSplit:
-    """ General class for splitting data into train, test and validation set. """
-
-    def __init__(
-        self,
-        dataset: Dataset,
-        train_val_fraction: int = TRAIN_SIZE,
-        val_fraction: int = VAL_SIZE,
-        shuffle=True
-    ):
-        """
-        Initialize samplers.
-        :param dataset:
-        :param train_val_fraction: fraction of the train & validation set
-        :param val_fraction:
-        :param shuffle: Whether to shuffle or not
-        """
-        self.dataset = dataset
-        dataset_size = len(dataset)
-        self.indices = list(range(dataset_size))
-        # index of where to split train and test
-        test_split = int(np.floor(train_val_fraction * dataset_size))
-
-        if shuffle:
-            np.random.shuffle(self.indices)
-
-        # train set is from 0-test_split and test set from test_split- dataset size
-        train_indices, self.test_indices = self.indices[:test_split], self.indices[test_split:]
-        # validation split is the index of where to split train and validation
-        val_split = int(np.floor((1 - val_fraction) * len(train_indices)))
-        # train set is from 0-validation_split and validation set from validation_split - train set size
-        self.train_indices, self.val_indices = train_indices[:val_split], train_indices[val_split:]
-
-        self.train_sampler = SubsetRandomSampler(indices=self.train_indices)
-        self.val_sampler = SubsetRandomSampler(indices=self.val_indices)
-        self.test_sampler = SubsetRandomSampler(indices=self.test_indices)
-
-    def get_train_split_point(self):
-        return len(self.train_sampler) + len(self.val_sampler)
-
-    def get_validation_split_point(self):
-        return len(self.train_sampler)
-
-    def get_train_val_test_split(
-        self,
-        batch_size: int,
-        num_workers: int = 0
-    ) -> Tuple[DataLoader, DataLoader, DataLoader]:
-        """
-        Split the data into train, validation and test set.
-        :param: batch_size
-        :param: num_workers
-        :return one torch Dataloader for train set, validation set and test set (in that order) each.
-        """
-        logging.debug('Initialize dataloaders for train, validation and test')
-
-        loaders = []
-        for sampler in [self.train_sampler, self.val_sampler, self.test_sampler]:
-            loaders.append(torch.utils.data.DataLoader(dataset=self.dataset, batch_size=batch_size,
-                                                       sampler=sampler,
-                                                       shuffle=False, num_workers=num_workers))
-        train_loader, val_loader, test_loader = tuple(loaders)
-        return train_loader, val_loader, test_loader
