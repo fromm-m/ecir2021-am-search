@@ -68,7 +68,7 @@ if __name__ == '__main__':
     ).items():
         y_true = []
         y_score = []
-        for x, y in test_loader:
+        for x, y in loader:
             y_pred = t_handler.predict(x)
             y_score.append(y_pred)
             y_true.append(y)
