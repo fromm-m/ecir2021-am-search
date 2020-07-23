@@ -3,6 +3,7 @@ import pprint
 
 import torch
 from torch import nn
+from torch.nn import BCEWithLogitsLoss
 from torch.utils.data.dataloader import DataLoader
 
 from arclus.data.data_split import PrecomputedPairwiseFeatures, split
@@ -11,10 +12,8 @@ from arclus.experiment import Experiment
 from arclus.models.train_test_handler import TrainTestHandler
 from arclus.utils import set_random_seed
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     to_db = False
 
     random_seed = 1
@@ -37,14 +36,17 @@ if __name__ == '__main__':
     base_model = nn.Sequential(
         nn.Dropout(p=dropout_rate),
         nn.Linear(in_features=ds_info['feature_dim'], out_features=1, bias=True),
-    ).to(device=device)
+    )
     print(base_model)
-    optimizer = torch.optim.Adam(params=base_model.parameters())
 
-    t_handler = TrainTestHandler(base_model=base_model, optimizer=optimizer)
+    t_handler = TrainTestHandler(
+        base_model=base_model,
+        criterion=BCEWithLogitsLoss(),
+        device=device,
+    )
 
     hyper_parameters = {
-        'model_name': base_model.get_model_name(),
+        'model_name': 'simple_feedforward',
         'batch_size': batch_size,
         'random_seed': random_seed,
         'num_train_samples': len(train_loader),

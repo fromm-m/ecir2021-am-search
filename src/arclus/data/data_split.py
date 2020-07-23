@@ -14,8 +14,8 @@ class PrecomputedPairwiseFeatures(Dataset):
         """
         x_data_pos = np.load(OUTPUT_FEATURES)
         x_data_neg = np.load(OUTPUT_FEATURES_NEGATIVE)
-        y_data_pos = torch.ones(len(x_data_pos), dtype=torch.long)
-        y_data_neg = torch.zeros(len(x_data_neg), dtype=torch.long)
+        y_data_pos = torch.ones(len(x_data_pos), 1)
+        y_data_neg = torch.zeros(len(x_data_neg), 1)
         self.X_data = np.concatenate((x_data_pos, x_data_neg))
         self.y_data = np.concatenate((y_data_pos, y_data_neg))
 

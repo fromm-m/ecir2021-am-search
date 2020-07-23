@@ -3,10 +3,8 @@ from typing import Optional
 
 import torch
 from torch import nn
-from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
 
-from arclus.evaluation import accuracy
 from arclus.utils import set_random_seed
 
 
@@ -21,7 +19,7 @@ class TrainTestHandler:
         self,
         base_model: nn.Module,
         optimizer,
-        criterion=CrossEntropyLoss(),
+        criterion,
         epochs: int = 2000,
         device: Optional[torch.device] = None,
         random_seed: Optional[int] = 0,
@@ -44,7 +42,7 @@ class TrainTestHandler:
 
         # Move model to device
         self.model = base_model.to(device=self.device)
-        self.optimizer = optimizer
+        self.optimizer = torch.optim.Adam(params=(p for p in base_model.parameters() if p.requires_grad))
         self.loss = criterion
 
     def reset_history(self):
@@ -65,16 +63,14 @@ class TrainTestHandler:
         for epoch in range(self.epochs):
             self.model.train()
 
-            for iteration, batch in enumerate(train_loader, 0):
+            for iteration, (x, y_true) in enumerate(train_loader, 0):
                 # torch *accumulates* the gradient; hence we need to zero it before computing new gradients
                 self.optimizer.zero_grad()
 
-                train_batch_x = batch[0].to(self.device)
-                train_batch_y = batch[1].to(self.device)
                 # predict probability for each class
-                batch_pred_y = self.model.forward(train_batch_x).to(self.device)
+                y_pred = self.model(x.to(self.device))
                 # get loss
-                loss_value = self.loss(batch_pred_y, train_batch_y)
+                loss_value = self.loss(y_pred, y_true.to(self.device))
 
                 # compute gradients
                 loss_value.backward()
@@ -117,36 +113,17 @@ class TrainTestHandler:
         :return: dict: Return loss and accuracy for this epoch
         """
         self.model.eval()
-        outputs = [self.validation_step(batch[0].to(self.device), batch[1].to(self.device)) for batch in val_loader]
-        return self.validation_epoch_end(outputs)
-
-    def validation_step(
-        self,
-        batch_x: torch.Tensor,
-        batch_y: torch.Tensor
-    ) -> dict:
-        """
-        Calculate loss and accuracy for a given batch.
-        :param batch_x: input values
-        :param batch_y: output values
-        :return: dict: contains validation loss and accuracy
-        """
-        pred_y = self.model.forward(batch_x).to(self.device)  # Generate predictions
-        loss_value = self.loss(pred_y, batch_y)
-        acc = accuracy(pred_y, batch_y)  # Calculate accuracy
-        return {'val_loss': loss_value.detach(), 'val_acc': acc}
-
-    @staticmethod
-    def validation_epoch_end(
-        outputs
-    ) -> dict:
-        """
-        Calculate mean loss and accuracy for all batches.
-        :param outputs:
-        :return: dict: contains validation loss and accuracy
-        """
-        batch_losses = [x['val_loss'] for x in outputs]
-        avg_epoch_loss = torch.stack(batch_losses).mean()  # Avg over val losses
-        batch_accs = [x['val_acc'] for x in outputs]
-        avg_epoch_acc = torch.stack(batch_accs).mean()  # Avg over val accuracies
-        return {'val_loss': avg_epoch_loss.item(), 'val_acc': avg_epoch_acc.item()}
+        with torch.no_grad():
+            val_loss = correct = count = 0
+            for x, y_true in val_loader:
+                y_pred = self.model(x.to(self.device))
+                y_true = y_true.to(self.device)
+                val_loss += (x.shape[0] * self.loss(y_pred, y_true)).item()
+                correct += ((y_pred > 0) == (y_true > 0)).sum().item()
+                count += y_true.numel()
+            val_loss /= count
+            acc = correct / count
+        return dict(
+            val_loss=val_loss,
+            val_acc=acc,
+        )
