@@ -18,8 +18,7 @@ class TrainTestHandler:
     def __init__(
         self,
         base_model: nn.Module,
-        optimizer,
-        criterion,
+        criterion: nn.Module,
         epochs: int = 2000,
         device: Optional[torch.device] = None,
         random_seed: Optional[int] = 0,
