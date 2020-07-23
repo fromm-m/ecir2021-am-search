@@ -1,13 +1,14 @@
 import logging
 import pprint
 
+from sklearn.metrics import classification_report
 import torch
 from torch import nn
 from torch.nn import BCEWithLogitsLoss
 from torch.utils.data.dataloader import DataLoader
 
 from arclus.data.data_split import PrecomputedPairwiseFeatures, split
-from arclus.evaluation import accuracy, class_metrics, f1_macro
+from arclus.evaluation import accuracy, f1_macro
 from arclus.experiment import Experiment
 from arclus.models.train_test_handler import TrainTestHandler
 from arclus.utils import set_random_seed
@@ -75,11 +76,12 @@ if __name__ == '__main__':
         y_score = torch.cat(y_score, dim=0)
         y_true = torch.cat(y_true, dim=0)
 
+        y_pred = torch.round(torch.sigmoid(y_score))
         result[subset] = dict(
-            accuary=accuracy(pred_y=y_score, labels=y_true, prob=True),
-            f1_macro=f1_macro(pred_y=y_score, labels=y_true, prob=True),
-            metrics=class_metrics(pred_y=y_score, labels=y_true, prob=True),
+            accuracy=accuracy(pred_y=y_pred, labels=y_true),
+            f1_macro=f1_macro(pred_y=y_pred, labels=y_true),
         )
+        print(classification_report(y_pred=y_pred, y_true=y_true))
 
     result['num_epochs'] = len(t_handler.history)
     result['val_loss'] = t_handler.history[-1]
