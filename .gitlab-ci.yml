@@ -37,6 +37,7 @@ venv:
     - which pip
     - pip install -U pip setuptools wheel
     - pip install -U -r requirements.txt
+    - pip install -U -r test_requirements.txt
     - pip list
   interruptible: true
 
