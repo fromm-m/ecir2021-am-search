@@ -9,7 +9,9 @@ df['relevance'].loc[(df['relevance'] == "notRelevant")] = 0
 df['relevance'].loc[(df['relevance'] == "yesRelevant")] = 1
 df['relevance'].loc[(df['relevance'] == "yesVeryRelevant")] = 2
 
-
+#algorithm = "premiseClusterID_first512Tokens"
+#algorithm = "premiseClusterID_slidingWindow"
+algorithm = "premiseClusterID_sentences"
 all_gain = []
 query_list = df["queryClaimID"].unique()
 #Iterate over each claim
@@ -18,7 +20,7 @@ for query in query_list:
     df_temp = df.loc[df["queryClaimID"] == query]
 
     #find out all clusters for a given claim
-    predicted_cluster_values_unique = df_temp["premiseClusterID_first512Tokens"].unique()
+    predicted_cluster_values_unique = df_temp[algorithm].unique()
 
     #sort clusters according to their id
     predicted_cluster_values_unique = np.sort(predicted_cluster_values_unique)
@@ -26,7 +28,7 @@ for query in query_list:
     # iterate over all predicted clusters starting with lowest id
     for item in predicted_cluster_values_unique:
         #only select the premises which are in cluster i
-        cluster_list = df_temp.loc[df_temp["premiseClusterID_first512Tokens"] == item]
+        cluster_list = df_temp.loc[df_temp[algorithm] == item]
 
         #calculate max_length of all premises in the cluster i
         max_length = cluster_list.resultClaimsPremiseText.str.len().max()
