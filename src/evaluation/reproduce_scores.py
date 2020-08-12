@@ -155,9 +155,9 @@ def main():
     df['relevance'].loc[(df['relevance'] == "yesVeryRelevant")] = 2
 
     ndcg_list = []
-    ndcg_list_mean = []
-    ndcg_list_max = []
-    ndcg_list_min = []
+    # ndcg_list_mean = []
+    # ndcg_list_max = []
+    # ndcg_list_min = []
 
     # Iterate over each claim
     for query in df["queryClaimID"].unique():
@@ -197,10 +197,10 @@ def main():
         # ndcg_list_max.append(np.array([scores]).max())
 
     # calculate all evaluations scores
-    print("task _a mean:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_mean).mean())
-    print("task _a min:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_min).mean())
-    print("task _a max:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_max).mean())
-    print("task _b ", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list).mean())
+    # print("task _a mean:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_mean).mean())
+    # print("task _a min:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_min).mean())
+    # print("task _a max:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_max).mean())
+    print("task _b;", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list).mean())
 
 
 if __name__ == '__main__':
