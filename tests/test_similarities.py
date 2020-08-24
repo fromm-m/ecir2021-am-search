@@ -1,3 +1,4 @@
+"""Tests for pairwise similarity functions."""
 import unittest
 from typing import Any, Mapping, Type
 
@@ -7,6 +8,8 @@ from arclus.get_similar import CSLSSimilarity, CosineSimilarity, LpSimilarity, S
 
 
 class SimilarityTests:
+    """Common tests for all similarities."""
+
     cls: Type[Sim]
     instance: Sim
     kwargs: Mapping[str, Any] = dict()
@@ -16,9 +19,11 @@ class SimilarityTests:
     n_premises: int = 7
 
     def setUp(self):
+        """Setup test instance."""
         self.instance = self.cls(**self.kwargs)
 
     def test_sim(self):
+        """Test sim()."""
         claims = torch.rand(self.n_claims, self.dim)
         premises = torch.rand(self.n_premises, self.dim)
         sim = self.instance.sim(claims=claims, premises=premises)
@@ -27,14 +32,20 @@ class SimilarityTests:
 
 
 class LpSimilarityTests(SimilarityTests, unittest.TestCase):
+    """Tests for LpSimilarity."""
+
     cls = LpSimilarity
 
 
 class CosineSimilarityTests(SimilarityTests, unittest.TestCase):
+    """Tests for CosineSimilarity."""
+
     cls = CosineSimilarity
 
 
 class CSLSSimilarityTests(SimilarityTests, unittest.TestCase):
+    """Tests for CSLSSimilarity."""
+
     cls = CSLSSimilarity
     kwargs = dict(
         base=CosineSimilarity(),
