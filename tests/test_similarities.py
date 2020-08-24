@@ -4,14 +4,14 @@ from typing import Any, Mapping, Type
 
 import torch
 
-from arclus.get_similar import CSLSSimilarity, CosineSimilarity, LpSimilarity, Sim
+from arclus.get_similar import CSLSSimilarity, CosineSimilarity, LpSimilarity, Similarity
 
 
 class SimilarityTests:
     """Common tests for all similarities."""
 
-    cls: Type[Sim]
-    instance: Sim
+    cls: Type[Similarity]
+    instance: Similarity
     kwargs: Mapping[str, Any] = dict()
 
     dim: int = 3
