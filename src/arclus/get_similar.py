@@ -1,3 +1,4 @@
+"""Similarity functions for claims and premises."""
 from typing import Tuple
 
 import torch
