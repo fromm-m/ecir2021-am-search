@@ -8,6 +8,14 @@ PREP_ASSIGNMENTS = DATA_ROOT / 'preprocessed' / 'assignments.csv'
 PREP_CLAIMS = DATA_ROOT / 'preprocessed' / 'claims.csv'
 PREP_PREMISES = DATA_ROOT / 'preprocessed' / 'premises.csv'
 
+# Training preparations
+TRAIN_SIZE = 0.7
+TEST_SIZE = 0.2
+VALID_SIZE = 1 - TRAIN_SIZE - TEST_SIZE
+TRAIN_PATH = DATA_ROOT / 'training' / 'train.csv'
+TEST_PATH = DATA_ROOT / 'training' / 'test.csv'
+VALID_PATH = DATA_ROOT / 'training' / 'valid.csv'
+
 # Preprocessing Test-Data
 PREP_ASSIGNMENTS_TEST = DATA_ROOT / 'preprocessed' / 'processedPremises.csv'
 PREP_CLAIMS_TEST = DATA_ROOT / 'preprocessed' / 'claim_test.csv'
@@ -19,7 +27,6 @@ PREMISES_LENGTH = 220
 OUTPUT_FEATURES = DATA_ROOT / 'features' / 'embeddings.npy'
 CLAIMS_TEST_FEATURES = DATA_ROOT / 'features' / 'claims_test_embeddings.npy'
 PREMISES_TEST_FEATURES = DATA_ROOT / 'features' / 'premises_test_embeddings.npy'
-
 
 # Negative Sampling
 NEGATIVE_SAMPLES = DATA_ROOT / 'preprocessed' / 'negatives.csv'
