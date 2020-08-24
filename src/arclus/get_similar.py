@@ -23,6 +23,27 @@ class CosineSimilarity(Sim):
         return functional.normalize(claims, p=2, dim=-1) @ functional.normalize(premises, p=2, dim=-1).transpose()
 
 
+def _mean_top_sim(sim: torch.Tensor, k: int, dim: int) -> torch.Tensor:
+    return sim.topk(k=k, dim=dim, largest=True, sorted=False)[0].mean(dim=dim).unsqueeze(dim=dim)
+
+
+class CSLSSimilarity(Sim):
+    """
+    Apply CSLS normalization to similarity
+
+    .. math ::
+        csls[i, j] = 2 * sim[i, j] - avg(top_k(sim[i, :])) - avg(top_k(sim[:, j]))
+    """
+
+    def __init__(self, base: Sim, k: int = 1):
+        self.base = base
+        self.k = k
+
+    def sim(self, claims: torch.Tensor, premises: torch.Tensor) -> torch.Tensor:
+        sim = self.base.sim(claims=claims, premises=premises)
+        return (2 * sim) - _mean_top_sim(sim=sim, k=self.k, dim=0) - _mean_top_sim(sim=sim, k=self.k, dim=1)
+
+
 def get_most_similar(
     claims: torch.Tensor,
     premises: torch.Tensor,
