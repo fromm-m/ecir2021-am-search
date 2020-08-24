@@ -15,12 +15,12 @@ class LpSimilarity(Sim):
 
     def sim(self, claims: torch.Tensor, premises: torch.Tensor) -> torch.Tensor:
         # change distance to similarity
-        return 1 / (1 + torch.cdist(claims, premises, p=p))
+        return 1 / (1 + torch.cdist(claims, premises, p=self.p))
 
 
 class CosineSimilarity(Sim):
     def sim(self, claims: torch.Tensor, premises: torch.Tensor) -> torch.Tensor:
-        return functional.normalize(claims, p=2, dim=-1) @ functional.normalize(premises, p=2, dim=-1).transpose()
+        return functional.normalize(claims, p=2, dim=-1) @ functional.normalize(premises, p=2, dim=-1).t()
 
 
 def _mean_top_sim(sim: torch.Tensor, k: int, dim: int) -> torch.Tensor:
