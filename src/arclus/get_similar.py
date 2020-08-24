@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import torch
+from torch.nn import functional
 
 
 class Sim:
@@ -8,10 +9,18 @@ class Sim:
         raise NotImplementedError()
 
 
-class KNNSim(Sim):
+class LpSimilarity(Sim):
+    def __init__(self, p: int = 2):
+        self.p = p
+
     def sim(self, claims: torch.Tensor, premises: torch.Tensor) -> torch.Tensor:
         # change distance to similarity
-        return 1 / (1 + torch.cdist(claims, premises))
+        return 1 / (1 + torch.cdist(claims, premises, p=p))
+
+
+class CosineSimilarity(Sim):
+    def sim(self, claims: torch.Tensor, premises: torch.Tensor) -> torch.Tensor:
+        return functional.normalize(claims, p=2, dim=-1) @ functional.normalize(premises, p=2, dim=-1).transpose()
 
 
 def get_most_similar(
