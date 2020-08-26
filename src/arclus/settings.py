@@ -2,17 +2,37 @@
 Global settings.
 """
 import pathlib
-
-TRAIN_SIZE = 0.8
-VAL_SIZE = 0.1
-
+# Preprocessing Training-Data
 DATA_ROOT = pathlib.Path('/nfs/data3/fromm/argument_clustering/data')
 # TODO: change to real output path
 DATA_EXPERIMENTS = pathlib.Path('/nfs/data3/obermeier/arclus/experiments')
 PREP_ASSIGNMENTS = DATA_ROOT / 'preprocessed' / 'assignments.csv'
 PREP_CLAIMS = DATA_ROOT / 'preprocessed' / 'claims.csv'
 PREP_PREMISES = DATA_ROOT / 'preprocessed' / 'premises.csv'
-OUTPUT_FEATURES = DATA_ROOT / 'features' / 'embeddings.npy'
-OUTPUT_FEATURES_NEGATIVE = DATA_ROOT / 'features' / 'embeddings_negatives.npy'
+
+# Training preparations
+TRAIN_SIZE = 0.7
+TEST_SIZE = 0.2
+VALID_SIZE = 1 - TRAIN_SIZE - TEST_SIZE
+
+TRAIN_PATH = DATA_ROOT / 'training' / 'train.csv'
+TEST_PATH = DATA_ROOT / 'training' / 'test.csv'
+VALID_PATH = DATA_ROOT / 'training' / 'valid.csv'
+
+# Preprocessing Test-Data
+PREP_ASSIGNMENTS_TEST = DATA_ROOT / 'preprocessed' / 'processedPremises.csv'
+PREP_CLAIMS_TEST = DATA_ROOT / 'preprocessed' / 'claim_test.csv'
+PREP_PREMISES_TEST = DATA_ROOT / 'preprocessed' / 'premises_test.csv'
+
+# Feature Generation
 CLAIMS_LENGTH = 19
 PREMISES_LENGTH = 220
+OUTPUT_FEATURES = DATA_ROOT / 'features' / 'embeddings.npy'
+OUTPUT_FEATURES_NEGATIVE = DATA_ROOT / 'features' / 'embeddings_negatives.npy'
+CLAIMS_TEST_FEATURES = DATA_ROOT / 'features' / 'claims_test_embeddings.npy'
+PREMISES_TEST_FEATURES = DATA_ROOT / 'features' / 'premises_test_embeddings.npy'
+
+# Negative Sampling
+NEGATIVE_SAMPLES = DATA_ROOT / 'preprocessed' / 'negatives.csv'
+# one negative per positive
+NUM_NEG_PER_POS = 1
