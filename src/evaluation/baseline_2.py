@@ -18,7 +18,7 @@ def main():
     parser.add_argument('--k', type=int, default=5, choices=[5, 10, ],
                         help='The first k elements in the ranking should be considered')
 
-    parser.add_argument('--repr', type=str, default="center", choices=["center", "nn_to_claim", ],
+    parser.add_argument('--repr', type=str, default="center", choices=["center", "nn_to_claim"],
                         help='How the cluster representative is chosen.')
 
     args = parser.parse_args()
@@ -75,12 +75,12 @@ def main():
                 get_most_similar(torch.reshape(center, (1, len(center))), torch.from_numpy(premises_representations), 1,
                                  LpSimilarity()) for center in prepare_centers]
         else:
-            mydict = {i: np.where(kmeans.labels_ == i)[0] for i in range(kmeans.n_clusters)}
+            premises_per_cluster = {i: np.where(kmeans.labels_ == i)[0] for i in range(kmeans.n_clusters)}
 
             # choose representative, here: nearest to claim
             repr = [
-                get_most_similar(claims_torch, torch.from_numpy(premises_representations[mydict[i]]), 1, LpSimilarity())
-                for i in range(kmeans.n_clusters)]
+                get_most_similar(claims_torch, torch.from_numpy(premises_representations[premises_per_cluster[i]]), 1,
+                                 LpSimilarity()) for i in range(kmeans.n_clusters)]
 
         # format representatives
         representatives = torch.cat([x[0].reshape(-1, x[0].shape[-1]) for x in repr])
