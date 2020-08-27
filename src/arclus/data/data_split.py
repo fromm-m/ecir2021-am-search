@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 
-from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, VAL_SIZE
+from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, TEST_SIZE
 
 
 class PrecomputedPairwiseFeatures(Dataset):
@@ -38,14 +38,13 @@ class PrecomputedPairwiseFeatures(Dataset):
 
 def split(
     dataset: Dataset,
-    train_test_ratio: int = TRAIN_SIZE,
-    train_validation_ratio: int = VAL_SIZE,
+    train_ratio: int = TRAIN_SIZE,
+    test_ratio: int = TEST_SIZE,
 ) -> Tuple[Dataset, Dataset, Dataset]:
     """Split the dataset into train-validation-test."""
     n_samples = len(dataset)
-    train_size = int(train_test_ratio * n_samples)
-    test_size = n_samples - train_size
-    train_size = int(train_validation_ratio * n_samples)
+    train_size = int(train_ratio * n_samples)
+    test_size = int(test_ratio * n_samples)
     validation_size = n_samples - train_size - test_size
     return random_split(dataset=dataset, lengths=[train_size, validation_size, test_size])
 
