@@ -4,7 +4,9 @@ import logging
 
 import pandas
 
-from arclus.settings import (CLAIMS_LENGTH, CLAIMS_TEST_FEATURES, OUTPUT_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS, PREP_CLAIMS, PREP_CLAIMS_TEST, PREP_PREMISES, PREP_PREMISES_TEST, PREMISES_LENGTH)
+from arclus.settings import (CLAIMS_LENGTH, CLAIMS_TEST_FEATURES, OUTPUT_FEATURES, PREMISES_TEST_FEATURES,
+                             PREP_ASSIGNMENTS, PREP_CLAIMS, PREP_CLAIMS_TEST, PREP_PREMISES, PREP_PREMISES_TEST,
+                             PREMISES_LENGTH)
 from arclus.text_encoding import encode_and_save_texts
 from arclus.utils import concat_premise_claims
 

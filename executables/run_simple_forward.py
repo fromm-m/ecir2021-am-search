@@ -7,7 +7,7 @@ from torch import nn
 from torch.nn import BCEWithLogitsLoss
 from torch.utils.data.dataloader import DataLoader
 
-from arclus.data.data_split import PrecomputedPairwiseFeatures, split
+from preprocessing.dataset_reader import PrecomputedPairwiseFeatures, split
 from arclus.evaluation import accuracy, f1_macro
 from arclus.experiment import Experiment
 from arclus.models.train_test_handler import TrainTestHandler

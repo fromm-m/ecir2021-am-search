@@ -94,7 +94,7 @@ class TrainTestHandler:
     ) -> torch.Tensor:
         """
         Predict probability for each label.
-        :param x: the data
+        :param x: the preprocessing
         :return: tensor containing probability for class 0 and 1 for each entry
         """
         self.model.eval()

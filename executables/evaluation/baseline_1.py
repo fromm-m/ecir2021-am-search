@@ -1,13 +1,13 @@
-import pandas as pd
 import argparse
+
 import numpy as np
-from sklearn.cluster import KMeans
+import pandas as pd
 import torch
 
-from arclus.settings import PREP_ASSIGNMENTS_TEST, PREP_CLAIMS_TEST, PREP_PREMISES_TEST, CLAIMS_TEST_FEATURES, \
-    PREMISES_TEST_FEATURES
-from evaluation.reproduce_scores import split_clusters, ndcg_score, best_ranking
-from arclus.get_similar import get_most_similar, LpSimilarity
+from arclus.evaluation import best_ranking, ndcg_score, split_clusters
+from arclus.get_similar import LpSimilarity, get_most_similar
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_CLAIMS_TEST, PREP_PREMISES_TEST
+from arclus.utils import load_assignments_with_numeric_relevance
 
 
 def main():
@@ -18,21 +18,12 @@ def main():
     parser.add_argument('--k', type=int, default=5, choices=[5, 10, ],
                         help='The first k elements in the ranking should be considered')
 
-    parser.add_argument('--repr', type=str, default="center", choices=["center", "nn_to_claim"],
-                        help='How the cluster representative is chosen.')
-
     args = parser.parse_args()
     k = args.k
-    repr_type = args.repr
-
-    df_assignments = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
     df_claims = pd.read_csv(PREP_CLAIMS_TEST)
     df_premises = pd.read_csv(PREP_PREMISES_TEST)
 
-    # set the relevance to the according value (cf. paper)
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "notRelevant")] = 0
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesRelevant")] = 1
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesVeryRelevant")] = 2
+    df_assignments = load_assignments_with_numeric_relevance()
 
     claims_representations = np.load(CLAIMS_TEST_FEATURES)
     premises_representations = np.load(PREMISES_TEST_FEATURES)
@@ -60,44 +51,18 @@ def main():
         # convert the claims and premises to tensors
         claims_torch = torch.from_numpy(claim_repr)
         claims_torch = torch.reshape(claims_torch, (1, len(claims_torch)))
+        premises_torch = torch.from_numpy(filtered_premise_representation)
 
-        n_clusters = round(len(filtered_premise_representation) / 2)
-        n_clusters = max([n_clusters, k])
-
-        # cluster all premises, n_clusters can be chosen
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(filtered_premise_representation)
-        prepare_centers = torch.from_numpy(kmeans.cluster_centers_)
-
-        # choose representative of each cluster
-        if repr_type == "center":
-            # choose nearest to cluster centers as representative for each cluster
-            repr = [
-                get_most_similar(torch.reshape(center, (1, len(center))), torch.from_numpy(premises_representations), 1,
-                                 LpSimilarity()) for center in prepare_centers]
-        else:
-            premises_per_cluster = {i: np.where(kmeans.labels_ == i)[0] for i in range(kmeans.n_clusters)}
-
-            # choose representative, here: nearest to claim
-            repr = [
-                get_most_similar(claims_torch, torch.from_numpy(premises_representations[premises_per_cluster[i]]), 1,
-                                 LpSimilarity()) for i in range(kmeans.n_clusters)]
-
-        # format representatives
-        representatives = torch.cat([x[0].reshape(-1, x[0].shape[-1]) for x in repr])
-        repr_ind = torch.cat([x[1].reshape(-1) for x in repr])
-
-        # choose the nearest premises to claim representation among cluster representatives
+        # find knn premises given a claim
         k_premises, k_indices = get_most_similar(
             claims=claims_torch,
-            premises=representatives,
+            premises=premises_torch,
             k=k,
             similarity=LpSimilarity()
         )
-        k_indices = torch.index_select(repr_ind, 0, k_indices.reshape(-1))
 
         # select the premises by index
         k_premise_ids = df_premises.iloc[k_indices.reshape(k)].premise_id.values
-
         mask_2 = df_assignments['resultClaimsPremiseID'].isin(k_premise_ids)
         k_premise_df = df_assignments[mask_2]
 
@@ -112,7 +77,7 @@ def main():
         # calculate nDCG for the given claim
         ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k))
 
-    print("task _b;", "algorithm:", "baseline_2", "nDCG@", k, np.array(ndcg_list).mean())
+    print("task _b;", "algorithm:", "baseline_1", "nDCG@", k, np.array(ndcg_list).mean())
 
 
 if __name__ == '__main__':

@@ -1,12 +1,17 @@
 """Utility methods."""
-
-import numpy as np
-
-import pandas
-
 import random
 
+import numpy as np
+import pandas
+import pandas as pd
 import torch
+
+from arclus.settings import PREP_ASSIGNMENTS_TEST
+
+
+def is_blank(text: str) -> bool:
+    """Return whether the text is blank."""
+    return len(text.strip()) == 0
 
 
 def set_random_seed(seed: int):
@@ -94,3 +99,12 @@ def concat_premise_claims(
         truncate,
         args=(max_claim_words,)
     )
+
+
+def load_assignments_with_numeric_relevance():
+    # set the relevance to the according value (cf. paper)
+    df_assignments = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
+    df_assignments['relevance'].loc[(df_assignments['relevance'] == "notRelevant")] = 0
+    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesRelevant")] = 1
+    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesVeryRelevant")] = 2
+    return df_assignments
