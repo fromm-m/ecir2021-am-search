@@ -1,4 +1,4 @@
-from preprocessing.read_json import is_blank
+from arclus.utils import is_blank
 
 
 def test_is_blank():

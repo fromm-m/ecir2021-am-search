@@ -55,5 +55,5 @@ def get_loader(
     num_workers: int = 0,
     shuffle: bool = True,
 ) -> DataLoader:
-    """Get a data loader."""
+    """Get a preprocessing loader."""
     return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
