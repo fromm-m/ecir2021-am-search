@@ -27,7 +27,8 @@ PREP_PREMISES_TEST = DATA_ROOT / 'preprocessed' / 'premises_test.csv'
 # Feature Generation
 CLAIMS_LENGTH = 19
 PREMISES_LENGTH = 220
-OUTPUT_FEATURES = DATA_ROOT / 'features' / 'embeddings.npy'
+OUTPUT_FEATURES_FOLDER = DATA_ROOT / 'features'
+OUTPUT_FEATURES_POSITIVES = DATA_ROOT / 'features' / 'embeddings_positives.npy'
 OUTPUT_FEATURES_NEGATIVE = DATA_ROOT / 'features' / 'embeddings_negatives.npy'
 CLAIMS_TEST_FEATURES = DATA_ROOT / 'features' / 'claims_test_embeddings.npy'
 PREMISES_TEST_FEATURES = DATA_ROOT / 'features' / 'premises_test_embeddings.npy'

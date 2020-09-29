@@ -38,8 +38,8 @@ def main():
         claim_id = row["claim_id"]
 
         # locate all premises which are assigned to the current claim
-        premises = df_assignments.loc[df_assignments["queryClaimID"] == claim_id]
-        premises_ids = premises["resultClaimsPremiseID"].values
+        premises = df_assignments.loc[df_assignments["claim_id"] == claim_id]
+        premises_ids = premises["premise_id"].values
         mask = df_premises['premise_id'].isin(premises_ids)
         premise_index = df_premises.index[mask]
         assert len(premise_index) == len(premises_ids)
