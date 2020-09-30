@@ -30,13 +30,13 @@ def load_and_cache_examples(args, task, tokenizer):
     # Load data features from cache or dataset file
     # if active learning, the train data will be saved inside each learning iteration directory
     cached_features_file = os.path.join(
-            "../../data/preprocessed",
-            "cached_{}_{}_{}".format(
-                "inference",
-                list(filter(None, args.model_path.split("/"))).pop(),
-                str(task),
-            ),
-        )
+        "../../data/preprocessed",
+        "cached_{}_{}_{}".format(
+            "inference",
+            list(filter(None, args.model_path.split("/"))).pop(),
+            str(task),
+        ),
+    )
 
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
@@ -60,7 +60,6 @@ def load_and_cache_examples(args, task, tokenizer):
         logger.info("Saving features into cached file %s", cached_features_file)
         torch.save(features, cached_features_file)
 
-
     # Convert to Tensors and build dataset
     all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
     all_attention_mask = torch.tensor(
@@ -69,10 +68,10 @@ def load_and_cache_examples(args, task, tokenizer):
     all_token_type_ids = torch.tensor(
         [f.token_type_ids for f in features], dtype=torch.long
     )
-#    if output_mode == "classification":
-#        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
-#    elif output_mode == "regression":
-#        all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
+    #    if output_mode == "classification":
+    #        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
+    #    elif output_mode == "regression":
+    #        all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
 
     dataset = TensorDataset(
         all_input_ids, all_attention_mask, all_token_type_ids
@@ -187,7 +186,7 @@ def convert_examples_to_features(
             logger.info(
                 "token_type_ids: %s" % " ".join([str(x) for x in token_type_ids])
             )
-#            logger.info("label: %s (id = %d)" % (example.label, label))
+        #            logger.info("label: %s (id = %d)" % (example.label, label))
 
         features.append(
             InputFeatures(
@@ -199,6 +198,7 @@ def convert_examples_to_features(
         )
 
     return features
+
 
 class SimilarityProcessor(DataProcessor):
     """Processor for the AM data set."""
