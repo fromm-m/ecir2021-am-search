@@ -30,6 +30,8 @@ before_script:
   - source /tmp/venv/${CI_PROJECT_ID}/${CI_COMMIT_REF_SLUG}/bin/activate
   - python -V
   - which python
+  - pip list
+
 
 venv:
   stage: build
