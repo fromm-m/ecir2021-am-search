@@ -29,14 +29,8 @@ def load_and_cache_examples(args, task, tokenizer):
 
     # Load data features from cache or dataset file
     # if active learning, the train data will be saved inside each learning iteration directory
-    cached_features_file = os.path.join(
-        "../../data/preprocessed",
-        "cached_{}_{}_{}".format(
-            "inference",
-            list(filter(None, args.model_path.split("/"))).pop(),
-            str(task),
-        ),
-    )
+    cached_features_file = os.path.join("../../data/preprocessed", "cached_{}_{}_{}".format("inference", list(
+        filter(None, args.model_path.split("/"))).pop(), str(task), ), )
 
     if os.path.exists(cached_features_file) and not args.overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
