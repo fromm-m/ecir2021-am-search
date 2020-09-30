@@ -14,8 +14,29 @@ def mdcg(
     premise_cluster_ids: numpy.ndarray,
     premise_relevance: numpy.ndarray,
 ) -> numpy.ndarray:
-    """
+    r"""
     Compute modified DCG.
+
+    Let :math:`R = [r_1 \ldots r_k]` denote a ranking of premises :math:`p_i \in P` from a set of premises :math:`P`.
+    Let :math:`C` denote a set of claims, and :math:`gain: C \times R \to \mathbb{R}` the gain of premise
+    :math:`r \in R` for claim :math:`c \in C`. Moreover, let :math:`K: P \to L` denote the cluster assignment for each
+    premise to a fixed set of clusters :math:`L`.
+
+    The modified discounted cumulative gain (mDCG) is defined as
+
+    .. math ::
+        mDCG(R, c, G, K) = \sum_i discount(i) \cdot G(c, r_i) \cdot \mathbb{I}[K(r_i) \notin \{ K(r_j) \mid j < i \})]
+
+    where :math:`\mathbb{I}` denotes the indicator function, and `discount` the discount factor as in the discounted
+    cumulative gain
+
+    .. math ::
+        discount(i) = 1 / \log_2(i + 1)
+
+    Moreover, there is a multiplicative modification, which cancels gains for premises from known premise clusters.
+
+    .. math ::
+        \mathbb{I}[K(r_i) \notin \{ K(r_j) \mid j < i \})]
 
     :param query_claim_ids: shape: (num_queries,), dtype: int
         The query claim ids.
