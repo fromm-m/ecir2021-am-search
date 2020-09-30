@@ -155,12 +155,10 @@ def convert_examples_to_features(
         assert len(input_ids) == max_length, "Error with input length {} vs {}".format(
             len(input_ids), max_length
         )
-        assert (
-                len(attention_mask) == max_length
-        ), "Error with input length {} vs {}".format(len(attention_mask), max_length)
-        assert (
-                len(token_type_ids) == max_length
-        ), "Error with input length {} vs {}".format(len(token_type_ids), max_length)
+        assert (len(attention_mask) == max_length), "Error with input length {} vs {}".format(len(attention_mask),
+                                                                                              max_length)
+        assert (len(token_type_ids) == max_length), "Error with input length {} vs {}".format(len(token_type_ids),
+                                                                                              max_length)
 
         if output_mode == "classification":
             if example.label is None:
