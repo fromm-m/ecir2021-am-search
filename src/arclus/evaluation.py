@@ -1,9 +1,53 @@
+"""Evaluation methods."""
 import itertools
 import math
 
+import numpy
 import pandas as pd
-from sklearn.metrics import f1_score
 import torch
+from sklearn.metrics import f1_score
+
+
+def mdcg(
+    query_claim_ids: numpy.ndarray,
+    predicted_rankings: numpy.ndarray,
+    premise_cluster_ids: numpy.ndarray,
+    premise_relevance: numpy.ndarray,
+) -> numpy.ndarray:
+    """
+    Compute modified DCG.
+
+    :param query_claim_ids: shape: (num_queries,), dtype: int
+        The query claim ids.
+    :param predicted_rankings: shape: (num_queries, k), dtype: int
+        The predicted rankings, comprising ordered sequences of premise IDs.
+    :param premise_cluster_ids: shape: (num_premises,), dtype: int
+        The cluster ID for each premise.
+    :param premise_relevance: shape: (num_claims, num_premises), dtype: float (or int)
+        The relevance of each premise for a claim.
+
+    :return: shape: (num_queries,)
+        The modified NCG for each query.
+    """
+    # allocate result array
+    score = numpy.zeros_like(query_claim_ids, dtype=numpy.float64)
+
+    # iterate
+    for i in range(predicted_rankings.shape[1]):
+        # get relevance
+        relevance = premise_relevance[query_claim_ids, predicted_rankings[:, i]]
+
+        # discard relevance if not first occurrence of cluster
+        if i > 0:
+            current_cluster = premise_cluster_ids[predicted_rankings[:, i]]
+            previous_clusters = premise_cluster_ids[predicted_rankings[:, :i]]
+            novel = (current_cluster[:, None] == previous_clusters).any(axis=-1)
+            relevance = relevance * novel.astype(relevance.dtype)
+
+        # discount
+        score += relevance / numpy.log2(i + 2)
+
+    return score
 
 
 def accuracy(
