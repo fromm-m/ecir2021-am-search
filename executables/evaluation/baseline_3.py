@@ -1,20 +1,17 @@
 import argparse
+import logging
 
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.cluster import KMeans
+from tqdm import tqdm
+from torch.utils.data import (DataLoader, SequentialSampler)
 
 from arclus.evaluation import best_ranking, ndcg_score, split_clusters
-from arclus.get_similar import LpSimilarity, get_most_similar
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_CLAIMS_TEST, PREP_PREMISES_TEST, \
-    PREP_ASSIGNMENTS_TEST
+from arclus.settings import PREP_CLAIMS_TEST, PREP_ASSIGNMENTS_TEST
 from arclus.utils import load_assignments_with_numeric_relevance
-from transformers import BertModel, BertTokenizer, BertForSequenceClassification
-from torch.utils.data import (DataLoader, SequentialSampler)
-import logging
-from src.arclus.preprocessing.utils_am import load_and_cache_examples
-from tqdm import tqdm
+from arclus.preprocessing.utils_am import load_and_cache_examples
+from transformers import BertTokenizer, BertForSequenceClassification
 
 
 def load_bert_model_and_data(args):
@@ -53,7 +50,7 @@ def main():
                         help='The first k elements in the ranking should be considered')
 
     parser.add_argument('--model_path', type=str, default="../../models/d3d4a9c7c23a4b85a20836a754e3aa56",
-                        help='Where the bert similarity model is located')
+                        help='Directory where the bert similarity model checkpoint is located')
     args = parser.parse_args()
 
     args.data_dir = PREP_ASSIGNMENTS_TEST
@@ -64,12 +61,14 @@ def main():
     args.batch_size = 128
     k = args.k
 
+    #load bert model and the data
     loader, data, model = load_bert_model_and_data(args)
+
+    #generate logits for all claims-premise pairs
     predictions = inference(args, data, loader, logger, model)
 
     df_assignments = load_assignments_with_numeric_relevance()
     df_claims = pd.read_csv(PREP_CLAIMS_TEST)
-    df_premises = pd.read_csv(PREP_PREMISES_TEST)
 
     ndcg_list = []
     # iterate over all claims

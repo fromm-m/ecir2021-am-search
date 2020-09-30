@@ -63,7 +63,7 @@ def main():
 
         # select the premises by index
         k_premise_ids = df_premises.iloc[k_indices.reshape(k)].premise_id.values
-        mask_2 = df_assignments['resultClaimsPremiseID'].isin(k_premise_ids)
+        mask_2 = df_assignments['premise_id'].isin(k_premise_ids)
         k_premise_df = df_assignments[mask_2]
 
         # generate the ranking (relevance) of the knn premises
