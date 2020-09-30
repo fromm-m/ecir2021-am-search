@@ -1,50 +1,18 @@
 import argparse
 import logging
+from logging import Logger
 
 import numpy as np
 import pandas as pd
-import torch
-from tqdm import tqdm
-from torch.utils.data import (DataLoader, SequentialSampler)
 
+from arclus.utils_am import load_bert_model_and_data, inference
 from arclus.evaluation import best_ranking, ndcg_score, split_clusters
 from arclus.settings import PREP_CLAIMS_TEST, PREP_ASSIGNMENTS_TEST
 from arclus.utils import load_assignments_with_numeric_relevance
-from arclus.preprocessing.utils_am import load_and_cache_examples
-from transformers import BertTokenizer, BertForSequenceClassification
-
-
-def load_bert_model_and_data(args):
-    tokenizer = BertTokenizer.from_pretrained(args.model_path)
-    bert_model = BertForSequenceClassification.from_pretrained(args.model_path)
-    data = load_and_cache_examples(args, args.task_name, tokenizer)
-    sampler = SequentialSampler(data)
-    return DataLoader(data, sampler=sampler, batch_size=args.batch_size), data, bert_model
-
-
-def inference(args, data, loader, logger, model):
-    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-    predictions = []
-    logger.info("***** Running inference {} *****".format(""))
-    logger.info("  Num examples = %d", len(data))
-    logger.info("  Batch size = %d", args.batch_size)
-    model.to(device)
-    model.eval()
-    with torch.no_grad():
-        for batch in tqdm(loader, desc="Inference"):
-            batch = tuple(t.to(device) for t in batch)
-            with torch.no_grad():
-                inputs = {'input_ids': batch[0],
-                          'attention_mask': batch[1],
-                          'token_type_ids': batch[2], }
-                outputs = model(**inputs)
-                logits = outputs[0].cpu().numpy()[:, 1]
-                predictions.extend(logits.tolist())
-    return predictions
 
 
 def main():
-    logger = logging.getLogger(__name__)
+    logger: Logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser(description='Pre-compute BERT features.')
     parser.add_argument('--k', type=int, default=5, choices=[5, 10],
                         help='The first k elements in the ranking should be considered')

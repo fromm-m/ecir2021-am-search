@@ -5,14 +5,47 @@ from torch.utils.data import TensorDataset
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
-import torch
 import pandas as pd
 import random
 import numpy as np
 from mlflow import log_param
+from arclus.utils_am import load_and_cache_examples
+from transformers import BertTokenizer, BertForSequenceClassification
+import torch
+from tqdm import tqdm
+from torch.utils.data import (DataLoader, SequentialSampler)
 
 logger = logging.getLogger(__name__)
 
+
+def load_bert_model_and_data(args):
+    tokenizer = BertTokenizer.from_pretrained(args.model_path)
+    bert_model = BertForSequenceClassification.from_pretrained(args.model_path)
+    data, examples = load_and_cache_examples(args, args.task_name, tokenizer)
+    sampler = SequentialSampler(data)
+    guids = [o.guid for o in examples]
+    return DataLoader(data, sampler=sampler, batch_size=args.batch_size), data, bert_model, guids
+
+
+def inference(args, data, loader, logger, model):
+    device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+    predictions = []
+    logger.info("***** Running inference {} *****".format(""))
+    logger.info("  Num examples = %d", len(data))
+    logger.info("  Batch size = %d", args.batch_size)
+    model.to(device)
+    model.eval()
+    with torch.no_grad():
+        for batch in tqdm(loader, desc="Inference"):
+            batch = tuple(t.to(device) for t in batch)
+            with torch.no_grad():
+                inputs = {'input_ids': batch[0],
+                          'attention_mask': batch[1],
+                          'token_type_ids': batch[2], }
+                outputs = model(**inputs)
+                logits = outputs[0].cpu().numpy()[:, 1]
+                predictions.extend(logits.tolist())
+    return predictions
 
 def set_seed(args):
     random.seed(args.seed)
@@ -70,7 +103,7 @@ def load_and_cache_examples(args, task, tokenizer):
     dataset = TensorDataset(
         all_input_ids, all_attention_mask, all_token_type_ids
     )
-    return dataset
+    return dataset, examples
 
 
 def convert_examples_to_features(
@@ -207,7 +240,7 @@ class SimilarityProcessor(DataProcessor):
         """Creates examples for the training and test sets."""
         examples = []
         for index, row in df.iterrows():
-            guid = str(row["claim_id"]) + "_" + str(row["premise_id"])
+            guid = row["premise_id"]
             text_a = row["premise_text"]
             text_b = row["claim_text"]
 
