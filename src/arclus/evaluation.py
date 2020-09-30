@@ -26,7 +26,7 @@ def mdcg(
     :param premise_relevance: shape: (num_claims, num_premises), dtype: float (or int)
         The relevance of each premise for a claim.
 
-    :return: shape: (num_queries,)
+    :return: shape: (num_queries,), dtype: float
         The modified NCG for each query.
     """
     # allocate result array
@@ -48,6 +48,85 @@ def mdcg(
         score += relevance / numpy.log2(i + 2)
 
     return score
+
+
+def get_optimal_ranking(
+    query_claim_ids: numpy.ndarray,
+    premise_cluster_ids: numpy.ndarray,
+    premise_relevance: numpy.ndarray,
+    k: int,
+) -> numpy.ndarray:
+    """
+    Compute the optimal ranking given the ground truth relevance and cluster assignments.
+
+    :param query_claim_ids: shape: (num_queries,), dtype: int
+        The query claim ids.
+    :param premise_cluster_ids: shape: (num_premises,), dtype: int
+        The cluster ID for each premise.
+    :param premise_relevance: shape: (num_claims, num_premises), dtype: float (or int)
+        The relevance of each premise for a claim.
+    :param k: >0
+        The length of the predicted ranking.
+
+    :return: shape: (num_queries, k), dtype: int
+        The optimal rankings.
+    """
+    # TODO: Improve vectorization
+    num_queries = query_claim_ids.shape[0]
+    result = numpy.empty(shape=(num_queries, k), dtype=numpy.int64)
+    for qid in range(num_queries):
+        known = set()
+        for pid in premise_relevance[query_claim_ids[qid]].argsort()[::-1]:
+            cid = int(premise_cluster_ids[pid])
+            if cid not in known:
+                result[qid, len(known)] = pid
+                known.add(cid)
+        assert len(known) >= k
+    return result
+
+
+def nmdcg(
+    query_claim_ids: numpy.ndarray,
+    predicted_rankings: numpy.ndarray,
+    premise_cluster_ids: numpy.ndarray,
+    premise_relevance: numpy.ndarray,
+) -> numpy.ndarray:
+    """
+    Compute the normalized modified DCG.
+
+    The score is normalized by the optimal score, and thus bound in [0, 1].
+
+    :param query_claim_ids: shape: (num_queries,), dtype: int
+        The query claim ids.
+    :param predicted_rankings: shape: (num_queries, k), dtype: int
+        The predicted rankings, comprising ordered sequences of premise IDs.
+    :param premise_cluster_ids: shape: (num_premises,), dtype: int
+        The cluster ID for each premise.
+    :param premise_relevance: shape: (num_claims, num_premises), dtype: float (or int)
+        The relevance of each premise for a claim.
+
+    :return: shape: (num_queries,), dtype: float
+        The modified NCG for each query.
+    """
+    optimal_ranking = get_optimal_ranking(
+        query_claim_ids=query_claim_ids,
+        premise_cluster_ids=premise_cluster_ids,
+        premise_relevance=premise_relevance,
+        k=predicted_rankings.shape[1],
+    )
+    optimal_value = mdcg(
+        query_claim_ids=query_claim_ids,
+        predicted_rankings=optimal_ranking,
+        premise_cluster_ids=premise_cluster_ids,
+        premise_relevance=premise_relevance,
+    )
+    value = mdcg(
+        query_claim_ids=query_claim_ids,
+        predicted_rankings=predicted_rankings,
+        premise_cluster_ids=premise_cluster_ids,
+        premise_relevance=premise_relevance,
+    )
+    return numpy.where(optimal_value <= 0.0, numpy.zeros_like(value), value / optimal_value)
 
 
 def accuracy(
