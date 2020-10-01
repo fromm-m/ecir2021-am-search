@@ -1,83 +1,62 @@
 import argparse
 
 import numpy as np
-import pandas as pd
 import torch
 
-from arclus.evaluation import best_ranking, ndcg_score, split_clusters
+from arclus.evaluation import best_ranking, ndcg_score, split_clusters, evaluate_premises
 from arclus.get_similar import LpSimilarity, get_most_similar
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_CLAIMS_TEST, PREP_PREMISES_TEST
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
 def main():
     """
-    Calculates normalized discounted cumulative gain (nDCG) for all queries.
+    Calculates normalized discounted cumulative gain (nDCG) for all queries with zero shot bert embeddings and knn.
     """
     parser = argparse.ArgumentParser(description='Pre-compute BERT features.')
     parser.add_argument('--k', type=int, default=5, choices=[5, 10, ],
                         help='The first k elements in the ranking should be considered')
-
+    parser.add_argument('--pad', type=bool, default=True,
+                        help='Should the ranking be padded with 0s until k positions are reached')
     args = parser.parse_args()
-    k = args.k
-    df_claims = pd.read_csv(PREP_CLAIMS_TEST)
-    df_premises = pd.read_csv(PREP_PREMISES_TEST)
 
-    df_assignments = load_assignments_with_numeric_relevance()
-
-    claims_representations = np.load(CLAIMS_TEST_FEATURES)
-    premises_representations = np.load(PREMISES_TEST_FEATURES)
+    # load assignments and representations
+    df = load_assignments_with_numeric_relevance()
+    claims_representations = torch.load(CLAIMS_TEST_FEATURES)
+    premises_representations = torch.load(PREMISES_TEST_FEATURES)
 
     ndcg_list = []
     # iterate over all claims
-    for index, row in df_claims.iterrows():
-        # get the claim representation
-        claim_repr = claims_representations[index]
-
-        # claim id which we use right now
-        claim_id = row["claim_id"]
-
+    for claim_id in df["claim_id"].unique():
         # locate all premises which are assigned to the current claim
-        premises = df_assignments.loc[df_assignments["queryClaimID"] == claim_id]
-        premises_ids = premises["resultClaimsPremiseID"].values
-        mask = df_premises['premise_id'].isin(premises_ids)
-        premise_index = df_premises.index[mask]
-        assert len(premise_index) == len(premises_ids)
+        premises = df.loc[df["claim_id"] == claim_id]
+        premises_ids = premises["premise_id"].to_numpy(dtype=str)
 
         # get the premises representations
-        filtered_premise_representation = premises_representations[premise_index]
-        assert len(filtered_premise_representation) == len(premise_index)
+        premise_representations = torch.stack([premises_representations[x] for x in premises_ids])
+        assert len(premise_representations) == len(premises_ids)
 
-        # convert the claims and premises to tensors
-        claims_torch = torch.from_numpy(claim_repr)
-        claims_torch = torch.reshape(claims_torch, (1, len(claims_torch)))
-        premises_torch = torch.from_numpy(filtered_premise_representation)
+        # get the claim representation
+        claim_representation = claims_representations[claim_id].unsqueeze(dim=0)
 
         # find knn premises given a claim
-        k_premises, k_indices = get_most_similar(
-            claims=claims_torch,
-            premises=premises_torch,
-            k=k,
-            similarity=LpSimilarity()
-        )
-
-        # select the premises by index
-        k_premise_ids = df_premises.iloc[k_indices.reshape(k)].premise_id.values
-        mask_2 = df_assignments['resultClaimsPremiseID'].isin(k_premise_ids)
-        k_premise_df = df_assignments[mask_2]
+        k_premises, k_indices = get_most_similar(claims=claim_representation, premises=premise_representations,
+                                                 k=args.k, similarity=LpSimilarity())
 
         # generate the ranking (relevance) of the knn premises
-        predicted_ranking = k_premise_df.relevance.values
+        knn_premises = premises.iloc[k_indices.squeeze().numpy()]
+        predicted_ranking = evaluate_premises(knn_premises)
 
         # groundtruth
         ordered_gt_cluster_ids = premises["premiseClusterID_groundTruth"].sort_values().dropna().unique()
         splitted_gt_clusters = split_clusters(premises, ordered_gt_cluster_ids, "premiseClusterID_groundTruth")
         gt_ranking = best_ranking(splitted_gt_clusters)
+        gt_ranking.sort(reverse=True)
 
         # calculate nDCG for the given claim
-        ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k))
+        ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=args.k, pad=args.pad))
 
-    print("task _b;", "algorithm:", "baseline_1", "nDCG@", k, np.array(ndcg_list).mean())
+    print("task_b;", "algorithm:", "baseline_1", "nDCG@", args.k, np.array(ndcg_list).mean())
 
 
 if __name__ == '__main__':

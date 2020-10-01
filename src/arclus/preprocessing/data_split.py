@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 
-from arclus.settings import OUTPUT_FEATURES, OUTPUT_FEATURES_NEGATIVE, TRAIN_SIZE, TEST_SIZE
+from arclus.settings import OUTPUT_FEATURES_NEGATIVE, OUTPUT_FEATURES_POSITIVES, TEST_SIZE, TRAIN_SIZE
 
 
 class PrecomputedPairwiseFeatures(Dataset):
@@ -12,7 +12,7 @@ class PrecomputedPairwiseFeatures(Dataset):
         """
         Load positive and negative output features and generate labels (1 for positive, 0 for negative)
         """
-        x_data_pos = np.load(OUTPUT_FEATURES)
+        x_data_pos = np.load(OUTPUT_FEATURES_POSITIVES)
         x_data_neg = np.load(OUTPUT_FEATURES_NEGATIVE)
         y_data_pos = torch.ones(len(x_data_pos), 1)
         y_data_neg = torch.zeros(len(x_data_neg), 1)

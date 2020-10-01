@@ -2,7 +2,7 @@ import argparse
 
 import numpy as np
 
-from arclus.evaluation import best_ranking, ndcg_score, split_clusters, task_b
+from arclus.evaluation import best_ranking, ndcg_score, split_clusters, find_cluster_representatives, evaluate_premises
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
@@ -16,21 +16,21 @@ def main():
                                  'premiseClusterID_sentences'], help='The algorithm which should be evaluated.')
     parser.add_argument('--k', type=int, default=5, choices=[5, 10, ],
                         help='The first k elements in the ranking should be considered')
+    parser.add_argument('--pad', type=bool, default=True,
+                        help='Should the ranking be padded with 0s until k positions are reached')
 
     args = parser.parse_args()
     algorithm = args.algorithm
     k = args.k
-    df = load_assignments_with_numeric_relevance()
+    column = 'P(\pi_j|q)_' + args.algorithm.split("_")[1]
+    df = load_assignments_with_numeric_relevance(column)
 
     ndcg_list = []
-    # ndcg_list_mean = []
-    # ndcg_list_max = []
-    # ndcg_list_min = []
 
     # Iterate over each claim
-    for query in df["queryClaimID"].unique():
+    for id in df["claim_id"].unique():
         # select all premises for a given claim
-        df_temp = df.loc[df["queryClaimID"] == query]
+        df_temp = df.loc[df["claim_id"] == id]
 
         # unique predicted cluster_ids for a given claim
         ordered_predicted_cluster_ids = df_temp[algorithm].sort_values().unique()
@@ -41,33 +41,25 @@ def main():
         # split premises according to predicted clusters
         splitted_prediction_clusters = split_clusters(df_temp, ordered_predicted_cluster_ids, algorithm)
 
+        # sort clusters by P(\pi_j|q) descending
+        splitted_prediction_clusters = sorted(splitted_prediction_clusters, key=lambda x: x[column].max(axis=0))[::-1]
+
         # split premises according to gt clusters
         splitted_gt_clusters = split_clusters(df_temp, ordered_gt_cluster_ids, "premiseClusterID_groundTruth")
 
         # calculate ranking of ordered_predicted_clusters
-        predicted_ranking = task_b(splitted_prediction_clusters)
+        predicted_premises = find_cluster_representatives(splitted_prediction_clusters)
+        predicted_ranking = evaluate_premises(predicted_premises)
         print("predicted_ranking", predicted_ranking)
 
         # calculate ranking of gt_clusters
         gt_ranking = best_ranking(splitted_gt_clusters)
+        gt_ranking.sort(reverse=True)
         print("gt_gain", gt_ranking)
 
         # calculate ndcg_score for given claim
-        ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k))
+        ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k, pad=args.pad))
 
-        # calculate ranking of all possible orders of clusters
-        # rankings = task_a(df_temp, splitted_prediction_clusters)
-        # scores = []
-        # for ranking in rankings:
-        #    scores.append(ndcg_score(y_score=ranking, y_true=gt_ranking, k=k))
-        # ndcg_list_mean.append(np.array([scores]).mean())
-        # ndcg_list_min.append(np.array([scores]).min())
-        # ndcg_list_max.append(np.array([scores]).max())
-
-    # calculate all evaluations scores
-    # print("task _a mean:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_mean).mean())
-    # print("task _a min:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_min).mean())
-    # print("task _a max:", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list_max).mean())
     print("task _b;", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list).mean())
 
 
