@@ -20,6 +20,25 @@ def f1_macro(
     return f1_score(y_pred=pred_y, y_true=labels, average='macro')
 
 
+def evaluate_premises(premises):
+    """
+    Calculates the ranking given the predicted_clusters, as the representative the longest premise is chosen.
+    :param ordered_clusters: shape: (number_predicted_clusters)
+        The ordered_clusters containing the premises.
+    :return: ranking:
+        The ranking for all predicted clusters ordered by the cluster_id.
+    """
+    ranking = []
+    seen_gt_clusters = set()
+    for index, row in premises.iterrows():
+        if str(row["premiseClusterID_groundTruth"]) in seen_gt_clusters:
+            ranking.append(0)
+        else:
+            ranking.append(row["relevance"])
+            seen_gt_clusters.add(str(row["premiseClusterID_groundTruth"]))
+    return ranking
+
+
 def dcg(arr: [int]) -> int:
     """
     Calculates discounted cumulative gain (DCG) for a given ranking.
@@ -30,10 +49,7 @@ def dcg(arr: [int]) -> int:
     """
     gain = 0.
     for i, value in enumerate(arr):
-        if i + 1 > 2:
-            gain = gain + (value / math.log2(i + 1))
-        else:
-            gain = gain + value
+        gain = gain + (value / math.log2(i + 2))
     return gain
 
 
@@ -80,29 +96,22 @@ def split_clusters(df: pd.DataFrame, cluster_ids: [int], condition: str) -> [pd.
     return clusters_list
 
 
-def task_b(ordered_clusters: [pd.DataFrame]) -> [int]:
+def find_cluster_representatives(ordered_clusters: [pd.DataFrame]) -> [str]:
     """
-    Calculates the ranking given the predicted_clusters, as the representative the longest premise is chosen.
+    Given the predicted_clusters, return as list of chosen cluster representatives (premises)
     :param ordered_clusters: shape: (number_predicted_clusters)
         The ordered_clusters containing the premises.
     :return: ranking:
         The ranking for all predicted clusters ordered by the cluster_id.
     """
-    ranking = []
-    seen_gt_clusters = set()
+    premises = pd.DataFrame([])
     for cluster in ordered_clusters:
-        # calculate max_length of all premises in the cluster i
-        max_length = cluster.premise_text.str.len().max()
         # search for the longest premise in cluster i
-        premise_represent = cluster.loc[cluster["premise_text"].str.len() == max_length]
-        if premise_represent.empty or math.isnan(max_length):
-            ranking.append(0)
-        elif str(premise_represent["premiseClusterID_groundTruth"].values[0]) in seen_gt_clusters:
-            ranking.append(0)
-        else:
-            ranking.append(premise_represent["relevance"].values[0])
-            seen_gt_clusters.add(str(premise_represent["premiseClusterID_groundTruth"].values[0]))
-    return ranking
+        premise_texts = cluster.premise_text.to_numpy(dtype=str)
+        max_length = len(max(premise_texts, key=len))
+        premise_represent = cluster.loc[cluster.premise_text.str.len() == max_length]
+        premises = premises.append(premise_represent)
+    return premises
 
 
 def task_a(df_temp: pd.DataFrame, ordered_clusters: [pd.DataFrame]) -> [[int]]:
@@ -126,11 +135,11 @@ def task_a(df_temp: pd.DataFrame, ordered_clusters: [pd.DataFrame]) -> [[int]]:
         seen_gt_clusters = set()
         for premise_id in combination:
             premise_represent = df_temp.loc[df_temp["resultClaimsPremiseID"] == premise_id]
-            if premise_represent["premiseClusterID_groundTruth"].values[0] in seen_gt_clusters:
+            if premise_represent["premiseClusterID_groundTruth"].to_numpy(dtype=str)[0] in seen_gt_clusters:
                 ranking.append(0)
             else:
-                ranking.append(premise_represent["relevance"].values[0])
-                seen_gt_clusters.add(premise_represent["premiseClusterID_groundTruth"].values[0])
+                ranking.append(premise_represent.relevance.to_numpy(dtype=int)[0])
+                seen_gt_clusters.add(premise_represent["premiseClusterID_groundTruth"].to_numpy(dtype=int)[0])
         all_rankings.append(ranking)
     return all_rankings
 
@@ -151,5 +160,5 @@ def best_ranking(ordered_clusters: [pd.DataFrame]) -> [int]:
         # search for the maximal relevant premise in cluster i
         premise_represent_gt = cluster.loc[cluster["relevance"] == max_relevance]
         # return the relevance value of the most relevant premise in c
-        ranking.append(premise_represent_gt["relevance"].values[0])
+        ranking.append(premise_represent_gt.relevance.to_numpy(dtype=int)[0])
     return ranking

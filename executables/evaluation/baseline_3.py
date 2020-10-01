@@ -5,7 +5,7 @@ from logging import Logger
 import numpy as np
 
 from arclus.utils_am import load_bert_model_and_data, inference
-from arclus.evaluation import best_ranking, ndcg_score, split_clusters
+from arclus.evaluation import best_ranking, ndcg_score, split_clusters, evaluate_premises
 from arclus.settings import PREP_ASSIGNMENTS_TEST
 from arclus.utils import load_assignments_with_numeric_relevance
 
@@ -35,19 +35,20 @@ def main():
 
     # generate logits for all claims-premise pairs
     predictions = inference(args, data, loader, logger, model)
+    d = dict(zip(guids, predictions))
 
     df = load_assignments_with_numeric_relevance()
     ndcg_list = []
     # iterate over all claims
-    start_id = 0
     assert len(predictions) == len(df)
     for id in df["claim_id"].unique():
         # locate all premises which are assigned to the current claim
         premises = df.loc[df["claim_id"] == id]
-        premises["similarity"] = predictions[start_id:start_id + len(premises)]
+        premises["similarity"] = premises['premise_id'].map(d)
         premises = premises.sort_values(by=['similarity'], ascending=False)
         # generate the ranking (relevance) of the knn premises
-        predicted_ranking = premises.relevance.values
+        predicted_ranking = evaluate_premises(premises)
+
         # groundtruth
         ordered_gt_cluster_ids = premises["premiseClusterID_groundTruth"].sort_values().dropna().unique()
         splitted_gt_clusters = split_clusters(premises, ordered_gt_cluster_ids, "premiseClusterID_groundTruth")
@@ -55,7 +56,6 @@ def main():
         gt_ranking.sort(reverse=True)
         # calculate nDCG for the given claim
         ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k, pad=args.pad))
-        start_id = start_id + len(premises)
     print("task _b;", "algorithm:", "baseline_3", "nDCG@", k, np.array(ndcg_list).mean())
 
 
