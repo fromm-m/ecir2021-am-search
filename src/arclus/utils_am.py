@@ -25,7 +25,7 @@ def load_bert_model_and_data(args):
     guids = [o.guid for o in examples]
     return DataLoader(data, sampler=sampler, batch_size=args.batch_size), data, bert_model, guids
 
-
+@torch.no_grad()
 def inference(args, data, loader, logger, model):
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     predictions = []
@@ -34,16 +34,14 @@ def inference(args, data, loader, logger, model):
     logger.info("  Batch size = %d", args.batch_size)
     model.to(device)
     model.eval()
-    with torch.no_grad():
-        for batch in tqdm(loader, desc="Inference"):
-            batch = tuple(t.to(device) for t in batch)
-            with torch.no_grad():
-                inputs = {'input_ids': batch[0],
-                          'attention_mask': batch[1],
-                          'token_type_ids': batch[2], }
-                outputs = model(**inputs)
-                logits = outputs[0].cpu().numpy()[:, 1]
-                predictions.extend(logits.tolist())
+    for batch in tqdm(loader, desc="Inference"):
+        batch = tuple(t.to(device) for t in batch)
+        inputs = {'input_ids': batch[0],
+                  'attention_mask': batch[1],
+                  'token_type_ids': batch[2], }
+        outputs = model(**inputs)
+        logits = outputs[0].cpu().numpy()[:, 1]
+        predictions.extend(logits.tolist())
     return predictions
 
 

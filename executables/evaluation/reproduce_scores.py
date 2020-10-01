@@ -2,7 +2,7 @@ import argparse
 
 import numpy as np
 
-from arclus.evaluation import best_ranking, ndcg_score, split_clusters, task_b
+from arclus.evaluation import best_ranking, ndcg_score, split_clusters, find_cluster_representatives, evaluate_premises
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
@@ -48,7 +48,8 @@ def main():
         splitted_gt_clusters = split_clusters(df_temp, ordered_gt_cluster_ids, "premiseClusterID_groundTruth")
 
         # calculate ranking of ordered_predicted_clusters
-        predicted_ranking = task_b(splitted_prediction_clusters)
+        predicted_premises = find_cluster_representatives(splitted_prediction_clusters)
+        predicted_ranking = evaluate_premises(predicted_premises)
         print("predicted_ranking", predicted_ranking)
 
         # calculate ranking of gt_clusters

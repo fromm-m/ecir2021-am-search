@@ -3,14 +3,14 @@ import argparse
 import logging
 from logging import Logger
 import numpy as np
-import pandas as pd
 import torch
 from sklearn.cluster import KMeans
 
 from arclus.utils_am import load_bert_model_and_data, inference
-from arclus.evaluation import best_ranking, ndcg_score, split_clusters
+from arclus.utils_clustering import clustering
+from arclus.evaluation import best_ranking, ndcg_score, split_clusters, evaluate_premises
 from arclus.get_similar import LpSimilarity, get_most_similar
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_CLAIMS_TEST, PREP_PREMISES_TEST, PREP_ASSIGNMENTS_TEST
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
@@ -65,53 +65,32 @@ def main():
         premises_ids = premises["premise_id"].to_numpy(dtype=str)
 
         # get the premises representations
-        premise_representation_list = [premises_representations[x] for x in premises_ids]
-        premises_repr = torch.stack(premise_representation_list)
-        assert len(premises_repr) == len(premises_ids)
+        premise_representations = torch.stack([premises_representations[x] for x in premises_ids])
+        assert len(premise_representations) == len(premises_ids)
 
         # get the claim representation
-        claim_repr = claims_representations[id].unsqueeze(dim=0)
-        n_clusters = round(len(premises_repr) / 1)
-        n_clusters = max([n_clusters, k])
-        # cluster all premises, n_clusters can be chosen
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(premises_repr)
-        prepare_centers = torch.from_numpy(kmeans.cluster_centers_)
+        claim_representation = claims_representations[id].unsqueeze(dim=0)
 
-        # choose representative of each cluster
-        if repr_type == "center":
-            # choose nearest to cluster centers as representative for each cluster
-            repr = [
-                get_most_similar(torch.reshape(center, (1, len(center))), premises_repr.double(), 1,
-                                 LpSimilarity()) for center in prepare_centers]
-        else:
-            premises_per_cluster = {i: np.where(kmeans.labels_ == i)[0] for i in range(kmeans.n_clusters)}
-
-            # choose representative, here: nearest to claim
-            repr = [
-                get_most_similar(claim_repr, torch.from_numpy(premises_representations[premises_per_cluster[i]]), 1,
-                                 LpSimilarity()) for i in range(kmeans.n_clusters)]
-
-        # format representatives
-        representatives = torch.cat([x[0].reshape(-1, x[0].shape[-1]) for x in repr])
-        repr_ind = torch.cat([x[1].reshape(-1) for x in repr])
+        # do clustering
+        repr_ind, representatives = clustering(args, claim_representation, premise_representations)
 
         # choose the nearest premises to claim representation among cluster representatives
         k_premises, k_indices = get_most_similar(
-            claims=claim_repr.float(),
+            claims=claim_representation.float(),
             premises=representatives.float(),
             k=k,
             similarity=LpSimilarity()
         )
         k_indices = torch.index_select(repr_ind, 0, k_indices.reshape(-1))
 
-        k_premise_df = df.iloc[k_indices.squeeze().numpy()]
+        k_premise_df = premises.iloc[k_indices.squeeze().numpy()]
 
 
         k_premise_df["similarity"] = k_premise_df['premise_id'].map(d)
         k_premise_df = k_premise_df.sort_values(by=['similarity'], ascending=False)
 
         # generate the ranking (relevance) of the knn premises
-        predicted_ranking = k_premise_df.relevance.values
+        predicted_ranking = evaluate_premises(k_premise_df)
 
         # groundtruth
         ordered_gt_cluster_ids = premises["premiseClusterID_groundTruth"].sort_values().dropna().unique()
