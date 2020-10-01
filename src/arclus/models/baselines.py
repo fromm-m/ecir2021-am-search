@@ -81,6 +81,8 @@ class ZeroShotClusterKNN(ZeroShotRanking):
     def __init__(
         self,
         similarity: Similarity,
+        claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
+        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
         reduction_factor: float = 0.5,
         cluster_representative: str = 'closest-to-center',
     ):
@@ -92,7 +94,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         :param reduction_factor:
             The relative number of premise clusters.
         """
-        super().__init__(similarity=similarity)
+        super().__init__(similarity=similarity, claims_path=claims_path, premises_path=premises_path)
         self.reduction_factor = reduction_factor
         self.cluster_representative = cluster_representative
 
@@ -141,7 +143,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
     def rank(self, queries: List[int], k: int) -> np.ndarray:  # noqa: D102
         # determine absolute number of clusters
-        n_clusters = (self.reduction_factor * self.premises.shape[0])
+        n_clusters = int(round(self.reduction_factor * self.premises.shape[0]))
         n_clusters = max([n_clusters, k])
 
         # Determine premise clusters
