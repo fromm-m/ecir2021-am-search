@@ -2,6 +2,7 @@
 Global settings.
 """
 import pathlib
+
 # Preprocessing Training-Data
 DATA_ROOT = pathlib.Path('/nfs/data3/fromm/argument_clustering/data')
 # TODO: change to real output path
@@ -20,7 +21,7 @@ TEST_PATH = DATA_ROOT / 'training' / 'test.csv'
 VALID_PATH = DATA_ROOT / 'training' / 'valid.csv'
 
 # Preprocessing Test-Data
-PREP_ASSIGNMENTS_TEST = DATA_ROOT / 'preprocessed' / 'processedPremises.csv'
+PREP_ASSIGNMENTS_TEST = DATA_ROOT / 'preprocessed' / 'old_filtered.csv'
 PREP_CLAIMS_TEST = DATA_ROOT / 'preprocessed' / 'claim_test.csv'
 PREP_PREMISES_TEST = DATA_ROOT / 'preprocessed' / 'premises_test.csv'
 

@@ -59,7 +59,6 @@ def main():
 
         n_clusters = round(len(filtered_premise_representation) / 2)
         n_clusters = max([n_clusters, k])
-
         # cluster all premises, n_clusters can be chosen
         kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(filtered_premise_representation)
         prepare_centers = torch.from_numpy(kmeans.cluster_centers_)
@@ -94,7 +93,7 @@ def main():
         # select the premises by index
         k_premise_ids = df_premises.iloc[k_indices.reshape(k)].premise_id.values
 
-        mask_2 = df_assignments['resultClaimsPremiseID'].isin(k_premise_ids)
+        mask_2 = df_assignments['premise_id'].isin(k_premise_ids)
         k_premise_df = df_assignments[mask_2]
 
         # generate the ranking (relevance) of the knn premises
@@ -104,6 +103,7 @@ def main():
         ordered_gt_cluster_ids = premises["premiseClusterID_groundTruth"].sort_values().dropna().unique()
         splitted_gt_clusters = split_clusters(premises, ordered_gt_cluster_ids, "premiseClusterID_groundTruth")
         gt_ranking = best_ranking(splitted_gt_clusters)
+        gt_ranking.sort(reverse=True)
 
         # calculate nDCG for the given claim
         ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k))

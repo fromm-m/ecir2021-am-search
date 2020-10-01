@@ -7,15 +7,15 @@ import torch
 
 
 def accuracy(
-    pred_y,
-    labels,
+        pred_y,
+        labels,
 ) -> torch.Tensor:
     return (pred_y == labels).sum().item() / len(pred_y)
 
 
 def f1_macro(
-    pred_y,
-    labels,
+        pred_y,
+        labels,
 ) -> float:
     return f1_score(y_pred=pred_y, y_true=labels, average='macro')
 
@@ -37,16 +37,25 @@ def dcg(arr: [int]) -> int:
     return gain
 
 
-def ndcg_score(y_score: [int], y_true: [int], k: int) -> int:
+def ndcg_score(y_score: [int], y_true: [int], k: int, pad: bool) -> int:
     """
     Calculates normalized discounted cumulative gain (nDCG) for a prediction and groundtruth ranking.
     :param y_score: shape: (number_clusters)
         The rankings of all prediction clusters
     :param y_true: shape: (number_clusters)
         The rankings of all groundtruth clusters
+    :param k:
+        Decides how long the maximal ranking is.
+    :param pad:
+        If true the rankings are padded with 0s until they reach length k.
     :return: gain:
         The normalized discounted cumulative gain (DCG)
     """
+    if pad:
+        while len(y_score) < k:
+            y_score.append(0)
+        while len(y_true) < k:
+            y_true.append(0)
     return dcg(y_score[:k]) / dcg(y_true[:k])
 
 
@@ -83,9 +92,9 @@ def task_b(ordered_clusters: [pd.DataFrame]) -> [int]:
     seen_gt_clusters = set()
     for cluster in ordered_clusters:
         # calculate max_length of all premises in the cluster i
-        max_length = cluster.resultClaimsPremiseText.str.len().max()
+        max_length = cluster.premise_text.str.len().max()
         # search for the longest premise in cluster i
-        premise_represent = cluster.loc[cluster["resultClaimsPremiseText"].str.len() == max_length]
+        premise_represent = cluster.loc[cluster["premise_text"].str.len() == max_length]
         if premise_represent.empty or math.isnan(max_length):
             ranking.append(0)
         elif str(premise_represent["premiseClusterID_groundTruth"].values[0]) in seen_gt_clusters:
