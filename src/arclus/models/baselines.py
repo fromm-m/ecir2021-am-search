@@ -1,4 +1,5 @@
-from abc import abstractmethod
+import pathlib
+from abc import ABC, abstractmethod
 from typing import List, Tuple
 
 import numpy as np
@@ -32,14 +33,19 @@ class RankingMethod:
         raise NotImplementedError
 
 
-class ZeroShotRanking(RankingMethod):
+class ZeroShotRanking(RankingMethod, ABC):
     """Abstract base class for zero-shot methods."""
 
     # Pre-computed representations
     claims: torch.FloatTensor
     premises: torch.FloatTensor
 
-    def __init__(self, similarity: Similarity):
+    def __init__(
+        self,
+        similarity: Similarity,
+        claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
+        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
+    ):
         """
         Initialize the method.
 
@@ -48,8 +54,8 @@ class ZeroShotRanking(RankingMethod):
         """
         self.similarity = similarity
         # Load pre-computed representations
-        self.claims = torch.load(CLAIMS_TEST_FEATURES)
-        self.premises = torch.load(PREMISES_TEST_FEATURES)
+        self.claims = torch.load(claims_path)
+        self.premises = torch.load(premises_path)
 
 
 class ZeroShotKNN(ZeroShotRanking):
