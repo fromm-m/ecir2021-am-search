@@ -28,9 +28,9 @@ def main():
     ndcg_list = []
 
     # Iterate over each claim
-    for query in df["claim_id"].unique():
+    for id in df["claim_id"].unique():
         # select all premises for a given claim
-        df_temp = df.loc[df["claim_id"] == query]
+        df_temp = df.loc[df["claim_id"] == id]
 
         # unique predicted cluster_ids for a given claim
         ordered_predicted_cluster_ids = df_temp[algorithm].sort_values().unique()
