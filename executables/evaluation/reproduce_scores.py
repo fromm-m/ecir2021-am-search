@@ -57,7 +57,7 @@ def main():
         print("gt_gain", gt_ranking)
 
         # calculate ndcg_score for given claim
-        ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k), args.pad)
+        ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k, pad=args.pad))
 
     print("task _b;", "algorithm:", algorithm, "nDCG@", k, np.array(ndcg_list).mean())
 

@@ -130,6 +130,7 @@ def main():
         ordered_gt_cluster_ids = premises["premiseClusterID_groundTruth"].sort_values().dropna().unique()
         splitted_gt_clusters = split_clusters(premises, ordered_gt_cluster_ids, "premiseClusterID_groundTruth")
         gt_ranking = best_ranking(splitted_gt_clusters)
+        gt_ranking.sort(reverse=True)
 
         # calculate nDCG for the given claim
         ndcg_list.append(ndcg_score(y_score=predicted_ranking, y_true=gt_ranking, k=k))
