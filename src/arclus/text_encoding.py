@@ -5,12 +5,14 @@ from typing import List, Union
 
 import numpy
 import pandas
+import torch
 from bert_serving.client import BertClient
 
 
 def encode_and_save_texts(
-    texts: Union[pandas.Series, List[str], numpy.ndarray],
-    output_path: Union[pathlib.Path, str],
+        texts: Union[pandas.Series, List[str], numpy.ndarray],
+        output_path: Union[pathlib.Path, str],
+        keys: Union[pandas.Series, List[str], numpy.ndarray],
 ) -> None:
     """
     Generate BERT features for texts using BERT-as-a-service.
@@ -26,7 +28,8 @@ def encode_and_save_texts(
 
     # Normalize texts
     if isinstance(texts, (pandas.Series, pandas.DataFrame)):
-        texts = texts.values
+        texts = texts.to_numpy(dtype=str)
+        keys = keys.to_numpy(dtype=str)
     if isinstance(texts, numpy.ndarray):
         texts = list(texts.flatten())
     assert isinstance(texts, list)
@@ -40,7 +43,9 @@ def encode_and_save_texts(
         output_path = pathlib.Path(output_path)
 
     # ensure parent directory exists
-    output_path.parent.mkdir(parents=True, exists_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # save to file
-    numpy.save(output_path, embeddings)
+    values = torch.from_numpy(embeddings)
+    d = dict(zip(keys, values))
+    torch.save(d, output_path)

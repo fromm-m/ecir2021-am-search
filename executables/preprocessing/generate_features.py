@@ -4,11 +4,15 @@ import logging
 
 import pandas
 
-from arclus.settings import (CLAIMS_LENGTH, CLAIMS_TEST_FEATURES, OUTPUT_FEATURES, PREMISES_TEST_FEATURES,
+from arclus.settings import (CLAIMS_LENGTH, CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES,
                              PREP_ASSIGNMENTS, PREP_CLAIMS, PREP_CLAIMS_TEST, PREP_PREMISES, PREP_PREMISES_TEST,
                              PREMISES_LENGTH)
 from arclus.text_encoding import encode_and_save_texts
 from arclus.utils import concat_premise_claims
+
+
+# premises bert server = 275
+# claims bert server = 25
 
 
 def main():
@@ -28,18 +32,22 @@ def main():
             max_premise_words=PREMISES_LENGTH,
             max_claim_words=CLAIMS_LENGTH,
         )
-        output_path = OUTPUT_FEATURES
     elif args.mode == 'claims':
-        texts = pandas.read_csv(PREP_CLAIMS_TEST)['claim_text']
+        df = pandas.read_csv(PREP_CLAIMS_TEST)
+        texts = df['claim_text']
+        keys = df['claim_id']
         output_path = CLAIMS_TEST_FEATURES
     elif args.mode == 'premises':
-        texts = pandas.read_csv(PREP_PREMISES_TEST)['premise_text']
+        df = pandas.read_csv(PREP_PREMISES_TEST)
+        texts = df['premise_text']
+        keys = df['premise_id']
         output_path = PREMISES_TEST_FEATURES
     else:
         raise ValueError(f'Invalid mode={args.mode}')
 
     # Delegate to library method
-    encode_and_save_texts(texts=texts, output_path=output_path)
+    assert (len(keys) == len(texts))
+    encode_and_save_texts(texts=texts, output_path=output_path, keys=keys)
 
 
 if __name__ == '__main__':
