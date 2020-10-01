@@ -9,8 +9,6 @@ from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
-
-
 def main():
     """
     Calculates normalized discounted cumulative gain (nDCG) for all queries with zero shot bert embeddings and knn.

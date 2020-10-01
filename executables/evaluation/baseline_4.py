@@ -85,7 +85,6 @@ def main():
 
         k_premise_df = premises.iloc[k_indices.squeeze().numpy()]
 
-
         k_premise_df["similarity"] = k_premise_df['premise_id'].map(d)
         k_premise_df = k_premise_df.sort_values(by=['similarity'], ascending=False)
 
