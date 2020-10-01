@@ -46,6 +46,7 @@ def inference(args, data, loader, logger, model):
                 predictions.extend(logits.tolist())
     return predictions
 
+
 def set_seed(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
