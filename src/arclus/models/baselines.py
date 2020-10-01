@@ -66,7 +66,7 @@ class ZeroShotKNN(ZeroShotRanking):
         result = np.empty(shape=(num_queries, k), dtype=np.int64)
         for i, claim_id in enumerate(queries):
             # get the claim representation
-            claim_repr = self.claims[claim_id]
+            claim_repr = self.claims[claim_id].unsqueeze(dim=0)
             # TODO: Evaluate only a subset of premises?
             result[i, :] = self.similarity.sim(
                 claims=claim_repr,
@@ -155,7 +155,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         result = np.empty(shape=(num_queries, k), dtype=np.int64)
         for i, claim_id in enumerate(queries):
             # get the claim representation
-            claim_repr = self.claims[claim_id]
+            claim_repr = self.claims[claim_id].unsqueeze(dim=0)
 
             # get cluster representations
             cluster_repr, cluster_repr_id = self._get_representatives(
