@@ -1,13 +1,49 @@
 import argparse
+from typing import List
 
 import numpy as np
 import pandas as pd
 import torch
 
 from arclus.evaluation import best_ranking, ndcg_score, split_clusters
-from arclus.get_similar import LpSimilarity, get_most_similar
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_CLAIMS_TEST, PREP_PREMISES_TEST
+from arclus.get_similar import LpSimilarity, Similarity, get_most_similar
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_PREMISES_TEST
 from arclus.utils import load_assignments_with_numeric_relevance
+
+
+def zero_shot_knn(
+    queries: List[int],
+    similarity: Similarity,
+    k: int,
+) -> np.ndarray:
+    """
+    Compute rankings with zero-shot BERT kNN baseline.
+
+    :param queries:
+        A list of query claim IDs.
+    :param similarity:
+        The similarity.
+    :param k: >0
+        The number of premises to return for each premise.
+
+    :return: shape: (num_claims, k)
+        A ranked list of premise IDs for each claim.
+    """
+    # Load pre-computed representations
+    claims_representations = torch.load(CLAIMS_TEST_FEATURES)
+    premises_representations = torch.load(PREMISES_TEST_FEATURES)
+
+    num_queries = len(queries)
+    result = np.empty(shape=(num_queries, k), dtype=np.int64)
+    for i, claim_id in enumerate(queries):
+        # get the claim representation
+        claim_repr = claims_representations[claim_id]
+        # TODO: Evaluate only a subset of premises?
+        result[i, :] = similarity.sim(
+            claims=claim_repr,
+            premises=premises_representations,
+        ).topk(k=k, largest=True, sorted=True).indices.numpy()
+    return result
 
 
 def main():
