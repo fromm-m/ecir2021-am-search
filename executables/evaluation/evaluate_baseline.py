@@ -1,5 +1,6 @@
 """Evaluation of baselines."""
 import argparse
+import logging
 import pathlib
 from hashlib import sha512
 
@@ -9,6 +10,7 @@ from arclus.similarity import get_similarity_by_name
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_root', default='results', type=str)
     parser.add_argument('--method', default='zero_shot_knn', type=str)
@@ -36,7 +38,7 @@ def main():
     # Instantiate method
     method = get_baseline_method_by_name(
         name=args.method,
-        similarity=get_similarity_by_name(name=args.similarity),
+        similarity=get_similarity_by_name(name=args.similarity) if args.similarity is not None else None,
         cluster_ratio=args.cluster_ratio,
         cluster_representative=args.cluster_representative,
     )
