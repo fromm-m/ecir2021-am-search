@@ -89,6 +89,13 @@ class ZeroShotKNN(ZeroShotRanking):
         return [premise_ids[i] for i in top_ids.tolist()]
 
 
+def _num_clusters(ratio: float, num_premises: int, k: int) -> int:
+    n_clusters = int(round(ratio * num_premises))
+    n_clusters = max(n_clusters, k)
+    n_clusters = min(n_clusters, num_premises)
+    return n_clusters
+
+
 class ZeroShotClusterKNN(ZeroShotRanking):
     """Rank according to similarity of pre-trained BERT representations, return at most one premise for each cluster."""
 
@@ -146,21 +153,14 @@ class ZeroShotClusterKNN(ZeroShotRanking):
             repr_ids[i] = local_premise_ids[mask][idx]
         return repr_ids
 
-    def _num_clusters(self, num_premises: int, k: int) -> int:
-        n_clusters = int(round(self.ratio * num_premises))
-        n_clusters = max(n_clusters, k)
-        n_clusters = min(n_clusters, num_premises)
-        return n_clusters
-
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get the claim representation
         claim_repr = self.claims[claim_id].unsqueeze(dim=0)
 
         # get premise representations
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
-
         # cluster premises
-        algorithm = KMeans(n_clusters=self._num_clusters(num_premises=len(premise_ids), k=k))
+        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=len(premise_ids), k=k))
         cluster_assignment = torch.as_tensor(algorithm.fit_predict(premise_repr.numpy()))
         cluster_centers = torch.as_tensor(algorithm.cluster_centers_)
 
@@ -238,6 +238,43 @@ class LearnedSimilarityKNN(RankingMethod):
             return self.precomputed_similarities[premise_id]
 
         return sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
+
+
+class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
+    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
+
+    def __init__(
+        self,
+        cluster_ratio: float = 0.5,
+        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
+        model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+        cache_root: str = '/tmp/arclus/bert',
+    ):
+        super().__init__(model_path=model_path, cache_root=cache_root)
+        self.ratio = cluster_ratio
+        self.premises = torch.load(premises_path)
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:
+        # get premise representations
+        num_premises = len(premise_ids)
+        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+
+        # cluster premises
+        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
+        cluster_assignment = algorithm.fit_predict(premise_repr.numpy())
+
+        # TODO: Why don't we need the claim_id?
+        def lookup_similarity(i: int) -> float:
+            return self.precomputed_similarities[premise_ids[i]]
+
+        seen_clusters = set()
+        result = []
+        for i in sorted(range(num_premises), key=lookup_similarity, reverse=True):
+            cluster_id = int(cluster_assignment[i])
+            if cluster_id not in seen_clusters:
+                result.append(i)
+            seen_clusters.add(cluster_id)
+        return result[:k]
 
 
 def name_normalizer(name: str) -> str:
