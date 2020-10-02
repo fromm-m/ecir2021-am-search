@@ -194,7 +194,7 @@ class LearnedSimilarityKNN(RankingMethod):
 
     def __init__(
         self,
-        model_path: str,
+        model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
     ):
         """
         Initialize the method.
@@ -205,6 +205,7 @@ class LearnedSimilarityKNN(RankingMethod):
 
         # load bert model and the data
         batch_size = 128
+        logger.info('Load data')
         loader, data, model, guids = load_bert_model_and_data_no_args(
             model_path=model_path,
             task_name="SIM",
@@ -217,6 +218,7 @@ class LearnedSimilarityKNN(RankingMethod):
 
         # generate logits for all claims-premise pairs
         # predictions = inference(args, data, loader, logger, model)
+        logger.info('Run inference')
         predictions = inference_no_args(data=data, loader=loader, logger=logger, model=model, batch_size=batch_size)
 
         # TODO: How to map guids to claim_id, premise_id?
