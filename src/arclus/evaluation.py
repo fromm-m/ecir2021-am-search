@@ -239,3 +239,26 @@ def evaluate_ranking_method(
             # evaluate ranking
             result_data.append((claim_id, kk, mndcg_score(predicted_ranking, queries)))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
+
+
+def evaluate_ranking_method_related_work(
+    method: str,
+    k: Union[int, Collection[int]],
+) -> pandas.DataFrame:
+    # Input normalization
+    if isinstance(k, int):
+        k = [k]
+    # load assignments
+    df = load_assignments_with_numeric_relevance()
+    assert method in {'sentences', 'slidingWindow', 'first512Tokens'}
+    # keep only relevant columns
+    method_col = f"P(\pi_j|q)_{method}"
+    df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth", method_col]]
+    # iterate over all claims
+    result_data = []
+    for claim_id, queries in tqdm(df.groupby(by="claim_id"), unit='claim'):
+        for kk in k:
+            predicted_ranking = queries.sort_values(by=method_col, ascending=False)['premise_id'].tolist()[:kk]
+            # evaluate ranking
+            result_data.append((claim_id, kk, mndcg_score(predicted_ranking, queries)))
+    return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])

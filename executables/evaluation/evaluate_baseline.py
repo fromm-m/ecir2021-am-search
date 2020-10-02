@@ -4,7 +4,7 @@ import logging
 import pathlib
 from hashlib import sha512
 
-from arclus.evaluation import evaluate_ranking_method
+from arclus.evaluation import evaluate_ranking_method, evaluate_ranking_method_related_work
 from arclus.models.baselines import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
 
@@ -36,13 +36,20 @@ def main():
         quit(0)
 
     # Instantiate method
-    method = get_baseline_method_by_name(
-        name=args.method,
-        similarity=get_similarity_by_name(name=args.similarity) if args.similarity is not None else None,
-        cluster_ratio=args.cluster_ratio,
-        cluster_representative=args.cluster_representative,
-    )
-    result_df = evaluate_ranking_method(method=method, k=args.k)
+    if args.method.startswith('dumani'):
+        # related work
+        result_df = evaluate_ranking_method_related_work(
+            method=args.method[len('dumani_'):],
+            k=args.k
+        )
+    else:
+        method = get_baseline_method_by_name(
+            name=args.method,
+            similarity=get_similarity_by_name(name=args.similarity) if args.similarity is not None else None,
+            cluster_ratio=args.cluster_ratio,
+            cluster_representative=args.cluster_representative,
+        )
+        result_df = evaluate_ranking_method(method=method, k=args.k)
     for key, value in config.items():
         result_df[key] = value
     result_df.to_csv(output_path, index=False, sep='\t')
