@@ -26,6 +26,7 @@ def load_bert_model_and_data_no_args(
     overwrite_cache: bool,
     max_seq_length: int,
     model_type: str,
+    cache_root: str,
 ) -> Tuple[DataLoader, TensorDataset, BertForSequenceClassification, List[Any]]:
     tokenizer = BertTokenizer.from_pretrained(model_path)
     bert_model = BertForSequenceClassification.from_pretrained(model_path)
@@ -37,6 +38,7 @@ def load_bert_model_and_data_no_args(
         overwrite_cache=overwrite_cache,
         max_seq_length=max_seq_length,
         model_type=model_type,
+        cache_root=cache_root,
     )
     sampler = SequentialSampler(data)
     guids = [o.guid for o in examples]
@@ -109,6 +111,7 @@ def load_and_cache_examples(
     overwrite_cache: bool,
     max_seq_length: int,
     model_type: str,
+    cache_root: str = "../../data/preprocessed",
 ):
     processor = processors[task]()
     output_mode = output_modes[task]
@@ -116,7 +119,7 @@ def load_and_cache_examples(
 
     # Load data features from cache or dataset file
     # if active learning, the train data will be saved inside each learning iteration directory
-    cached_features_file = os.path.join("../../data/preprocessed", "cached_{}_{}_{}".format("inference", list(
+    cached_features_file = os.path.join(cache_root, "cached_{}_{}_{}".format("inference", list(
         filter(None, model_path.split("/"))).pop(), str(task), ), )
 
     if os.path.exists(cached_features_file) and not overwrite_cache:

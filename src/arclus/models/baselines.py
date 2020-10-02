@@ -195,6 +195,7 @@ class LearnedSimilarityKNN(RankingMethod):
     def __init__(
         self,
         model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+        cache_root: str = '/tmp/arclus/bert',
     ):
         """
         Initialize the method.
@@ -214,6 +215,7 @@ class LearnedSimilarityKNN(RankingMethod):
             overwrite_cache=True,
             max_seq_length=512,
             model_type="bert",
+            cache_root=cache_root,
         )
 
         # generate logits for all claims-premise pairs
