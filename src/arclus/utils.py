@@ -109,9 +109,12 @@ def format_numbers(numbers_string):
 def load_assignments_with_numeric_relevance(column: str = None):
     # set the relevance to the according value (cf. paper)
     df_assignments = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "notRelevant")] = 0
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesRelevant")] = 1
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesVeryRelevant")] = 2
+    translation = {
+        "notRelevant": 0,
+        "yesRelevant": 1,
+        "yesVeryRelevant": 2,
+    }
+    df_assignments["relevance"] = df_assignments["relevance"].apply(translation.__getitem__)
     if column is not None:
         df_assignments[column] = df_assignments[column].apply(format_numbers)
     return df_assignments
