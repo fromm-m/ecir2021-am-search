@@ -1,8 +1,7 @@
 import pathlib
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import List, Mapping
 
-import numpy as np
 import torch
 from sklearn.cluster import KMeans
 
@@ -16,19 +15,22 @@ class RankingMethod:
     @abstractmethod
     def rank(
         self,
-        queries: List[int],
+        claim_id: int,
+        premise_ids: str,
         k: int,
-    ) -> np.ndarray:
+    ) -> List[str]:
         """
         Return a sorted list of k premise IDs for each query claim.
 
-        :param queries:
-            The query claim IDs.
+        :param claim_id:
+            The query claim ID.
+        :param premise_ids:
+            The candidate premise IDs.
         :param k: >0
             The number of premises to return for each claim.
 
-        :return: shape: (num_queries, k)
-            The sorted list of premise IDs for each query claim.
+        :return:
+            The sorted list of k premise IDs for each query claim.
         """
         raise NotImplementedError
 
@@ -37,8 +39,8 @@ class ZeroShotRanking(RankingMethod, ABC):
     """Abstract base class for zero-shot methods."""
 
     # Pre-computed representations
-    claims: torch.FloatTensor
-    premises: torch.FloatTensor
+    claims: Mapping[int, torch.FloatTensor]
+    premises: Mapping[str, torch.FloatTensor]
 
     def __init__(
         self,
@@ -51,8 +53,13 @@ class ZeroShotRanking(RankingMethod, ABC):
 
         :param similarity:
             The similarity to use for the representations.
+        :param claims_path:
+            The path to the pre-computed claims representations.
+        :param premises_path:
+            The path to the pre-computed premises representations.
         """
         self.similarity = similarity
+
         # Load pre-computed representations
         self.claims = torch.load(claims_path)
         self.premises = torch.load(premises_path)
@@ -61,18 +68,18 @@ class ZeroShotRanking(RankingMethod, ABC):
 class ZeroShotKNN(ZeroShotRanking):
     """Rank according to similarity of pre-trained BERT representations."""
 
-    def rank(self, queries: List[int], k: int) -> np.ndarray:  # noqa: D102
-        num_queries = len(queries)
-        result = np.empty(shape=(num_queries, k), dtype=np.int64)
-        for i, claim_id in enumerate(queries):
-            # get the claim representation
-            claim_repr = self.claims[claim_id].unsqueeze(dim=0)
-            # TODO: Evaluate only a subset of premises?
-            result[i, :] = self.similarity.sim(
-                claims=claim_repr,
-                premises=self.premises,
-            ).topk(k=k, largest=True, sorted=True).indices.numpy()
-        return result
+    def rank(self, claim_id: int, premise_ids: str, k: int) -> List[str]:  # noqa: D102
+        # get the claim representation
+        claim_repr = self.claims[claim_id].unsqueeze(dim=0)
+        # get premise representations
+        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+        # find most similar
+        top_ids = self.similarity.sim(
+            claims=claim_repr,
+            premises=premise_repr,
+        ).topk(k=k, largest=True, sorted=True).indices
+        # re-translate to original IDs
+        return [premise_ids[i] for i in top_ids.tolist()]
 
 
 class ZeroShotClusterKNN(ZeroShotRanking):
@@ -81,9 +88,9 @@ class ZeroShotClusterKNN(ZeroShotRanking):
     def __init__(
         self,
         similarity: Similarity,
+        n_clusters: int,
         claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
         premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
-        reduction_factor: float = 0.5,
         cluster_representative: str = 'closest-to-center',
     ):
         """
@@ -91,87 +98,89 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
         :param similarity:
             The similarity to use for the representations.
-        :param reduction_factor:
-            The relative number of premise clusters.
+        :param n_clusters: >0
+            The number of clusters to use.
+        :param claims_path:
+            The path to the pre-computed claims representations.
+        :param premises_path:
+            The path to the pre-computed premises representations.
+        :param cluster_representative:
+            The method to choose a cluster representative. From {'closest-to-center', 'closest-to-claim'}.
         """
         super().__init__(similarity=similarity, claims_path=claims_path, premises_path=premises_path)
-        self.reduction_factor = reduction_factor
+        self.n_clusters = n_clusters
         self.cluster_representative = cluster_representative
 
-    def _get_representatives(
+        # cluster premises
+        sorted_premise_ids = sorted(self.premises.keys())
+        premises = torch.stack([self.premises[premise_id] for premise_id in sorted_premise_ids], dim=0).numpy()
+        kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+        assignment = kmeans.fit_predict(premises).tolist()
+        self.cluster_assignment = dict(zip(sorted_premise_ids, assignment))
+        self.centroids = torch.from_numpy(kmeans.cluster_centers_)
+
+    def _get_cluster_representatives(
         self,
-        premises: torch.FloatTensor,
+        claim_repr: torch.FloatTensor,
+        premise_repr: torch.FloatTensor,
         assignment: torch.LongTensor,
         centroids: torch.FloatTensor,
-        n_clusters: int,
-        claim_repr: torch.FloatTensor,
-    ) -> Tuple[torch.FloatTensor, torch.LongTensor]:
-        """
-        Select cluster representatives for each cluster.
-
-        :param premises: shape: (num_premises, dim)
-            The premise representations.
-        :param assignment: shape: (num_premises,)
-            The cluster assignment
-        :param centroids: shape: (num_premises,)
-            The cluster centroids.
-        :param n_clusters: >0
-            The number of clusters.
-        :param claim_repr: shape: (dim,)
-            The claim representation.
-
-        :return:
-            A tuple repr, repr_id of the representations of the representative premises for each cluster and their
-            corresponding premise IDs.
-        """
-        premise_ids = torch.arange(premises.shape[0])
-        cluster_repr_id = premises.new_empty(n_clusters, dtype=torch.long)
-        cluster_repr = premises.new_empty(n_clusters, premises.shape[-1])
+    ) -> torch.LongTensor:
+        n_clusters = centroids.shape[0]
+        local_premise_ids = torch.arange(premise_repr.shape[0])
+        repr_ids = torch.empty(n_clusters, dtype=torch.long)
         for i in range(n_clusters):
             if self.cluster_representative == 'closest-to-center':
                 anchor = centroids[i]
             elif self.cluster_representative == 'closest-to-claim':
                 anchor = claim_repr
             else:
-                raise NotImplementedError
+                raise NotImplementedError(self.cluster_representative)
             mask = assignment == i
-            premises_in_cluster = premises[mask]
-            idx = self.similarity.sim(claims=anchor.unsqueeze(dim=0), premises=premises_in_cluster).argmax(dim=1)[0]
-            cluster_repr[i, :] = premises_in_cluster[idx]
-            cluster_repr_id[i] = premise_ids[mask][idx]
-        return cluster_repr, cluster_repr_id
+            if not mask.any():
+                raise NotImplementedError('Empty cluster')
+            premises_in_cluster = premise_repr[mask]
+            idx = self.similarity.sim(
+                claims=anchor.unsqueeze(dim=0),
+                premises=premises_in_cluster,
+            ).argmax(dim=1)[0]
+            repr_ids[i] = local_premise_ids[mask][idx]
+        return repr_ids
 
-    def rank(self, queries: List[int], k: int) -> np.ndarray:  # noqa: D102
-        # determine absolute number of clusters
-        n_clusters = int(round(self.reduction_factor * self.premises.shape[0]))
-        n_clusters = max([n_clusters, k])
+    def rank(
+        self,
+        claim_id: int,
+        premise_ids: str,
+        k: int,
+    ) -> List[str]:
+        # get the claim representation
+        claim_repr = self.claims[claim_id].unsqueeze(dim=0)
 
-        # Determine premise clusters
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0)
-        assignment = torch.from_numpy(kmeans.fit_predict(self.premises.numpy()))
-        centroids = torch.from_numpy(kmeans.cluster_centers_)
+        # get premise representations
+        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
 
-        num_queries = len(queries)
-        result = np.empty(shape=(num_queries, k), dtype=np.int64)
-        for i, claim_id in enumerate(queries):
-            # get the claim representation
-            claim_repr = self.claims[claim_id].unsqueeze(dim=0)
+        # cluster premises
+        n_clusters = max(self.n_clusters, k)
+        algorithm = KMeans(n_clusters=n_clusters)
+        cluster_assignment = torch.as_tensor(algorithm.fit_predict(premise_repr.numpy()))
+        cluster_centers = torch.as_tensor(algorithm.cluster_centers_)
 
-            # get cluster representations
-            cluster_repr, cluster_repr_id = self._get_representatives(
-                premises=self.premises,
-                assignment=assignment,
-                centroids=centroids,
-                n_clusters=n_clusters,
-                claim_repr=claim_repr,
-            )
+        # choose representatives
+        cluster_repr_id = self._get_cluster_representatives(
+            claim_repr=claim_repr,
+            premise_repr=premise_repr,
+            assignment=cluster_assignment,
+            centroids=cluster_centers,
+        )
 
-            # get closest cluster representatives
-            top_clusters = self.similarity.sim(
-                claims=claim_repr,
-                premises=cluster_repr,
-            ).topk(k=k, largest=True, sorted=True).indices.numpy()
+        # find most similar clusters
+        top_cluster_id = self.similarity.sim(
+            claims=claim_repr,
+            premises=premise_repr[cluster_repr_id],
+        ).topk(k=k, largest=True, sorted=True).indices
 
-            # choose representative of cluster
-            result[i, :] = cluster_repr_id[top_clusters].numpy()
-        return result
+        # re-translate to local (batch) premise ID
+        top_ids = [cluster_repr_id[i] for i in top_cluster_id.tolist()]
+
+        # re-translate to original IDs
+        return [premise_ids[i] for i in top_ids]

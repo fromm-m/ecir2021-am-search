@@ -1,5 +1,6 @@
 import pandas
 
+from arclus.models.baselines import RankingMethod
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
@@ -12,16 +13,17 @@ def main():
     # keep only relevant columns
     df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth"]]
 
+    # Instantiate method
+    method: RankingMethod
+
     # iterate over all claims
     result_data = []
     for claim_id, queries in df.groupby(by="claim_id"):
-        # locate all premises which are assigned to the current claim
-        premises_ids = queries["premise_id"].to_numpy(dtype=str)
-
         # predict ranking
         predicted_ranking = method.rank(
-            claim_id,
-            premise_ids,
+            claim_id=claim_id,
+            premise_ids=queries["premise_id"].to_numpy(dtype=str),
+            k=k,
         )
 
         # evaluate ranking
