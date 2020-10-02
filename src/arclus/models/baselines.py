@@ -122,20 +122,20 @@ class ZeroShotClusterKNN(ZeroShotRanking):
     ) -> torch.LongTensor:
         n_clusters = centroids.shape[0]
         local_premise_ids = torch.arange(premise_repr.shape[0])
-        repr_ids = torch.empty(n_clusters, dtype=torch.long)
+        repr_ids = torch.full(size=(n_clusters,), fill_value=-1, dtype=torch.long)
         for i in range(n_clusters):
             if self.cluster_representative == 'closest-to-center':
-                anchor = centroids[i]
+                anchor = centroids[i].unsqueeze(dim=0)
             elif self.cluster_representative == 'closest-to-claim':
                 anchor = claim_repr
             else:
                 raise NotImplementedError(self.cluster_representative)
             mask = assignment == i
             if not mask.any():
-                raise NotImplementedError('Empty cluster')
+                continue
             premises_in_cluster = premise_repr[mask]
             idx = self.similarity.sim(
-                claims=anchor.unsqueeze(dim=0),
+                claims=anchor,
                 premises=premises_in_cluster,
             ).argmax(dim=1)[0]
             repr_ids[i] = local_premise_ids[mask][idx]
@@ -168,13 +168,14 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         )
 
         # find most similar clusters
+        non_empty_clusters = cluster_repr_id >= 0
         top_cluster_id = self.similarity.sim(
             claims=claim_repr,
-            premises=premise_repr[cluster_repr_id],
+            premises=premise_repr[cluster_repr_id[non_empty_clusters]],
         ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
 
         # re-translate to local (batch) premise ID
-        top_ids = [cluster_repr_id[i] for i in top_cluster_id.tolist()]
+        top_ids = [cluster_repr_id[non_empty_clusters][i] for i in top_cluster_id.tolist()]
 
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids]
