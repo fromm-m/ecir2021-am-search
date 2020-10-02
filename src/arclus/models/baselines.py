@@ -1,6 +1,6 @@
 import pathlib
 from abc import ABC, abstractmethod
-from typing import List, Mapping
+from typing import List, Mapping, Sequence
 
 import torch
 from sklearn.cluster import KMeans
@@ -16,9 +16,9 @@ class RankingMethod:
     def rank(
         self,
         claim_id: int,
-        premise_ids: str,
+        premise_ids: Sequence[str],
         k: int,
-    ) -> List[str]:
+    ) -> Sequence[str]:
         """
         Return a sorted list of k premise IDs for each query claim.
 
@@ -68,7 +68,7 @@ class ZeroShotRanking(RankingMethod, ABC):
 class ZeroShotKNN(ZeroShotRanking):
     """Rank according to similarity of pre-trained BERT representations."""
 
-    def rank(self, claim_id: int, premise_ids: str, k: int) -> List[str]:  # noqa: D102
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get the claim representation
         claim_repr = self.claims[claim_id].unsqueeze(dim=0)
         # get premise representations
@@ -147,12 +147,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
             repr_ids[i] = local_premise_ids[mask][idx]
         return repr_ids
 
-    def rank(
-        self,
-        claim_id: int,
-        premise_ids: str,
-        k: int,
-    ) -> List[str]:
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get the claim representation
         claim_repr = self.claims[claim_id].unsqueeze(dim=0)
 
