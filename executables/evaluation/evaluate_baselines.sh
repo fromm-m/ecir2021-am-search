@@ -3,6 +3,11 @@ export PYTHONPATH=../../src
 time=$(date)
 echo "[START] ${time}"
 
+# 0. Dumani et al.
+python3 evaluate_baseline.py --method dumani_first512Tokens >/dev/null
+python3 evaluate_baseline.py --method dumani_slidingWindow >/dev/null
+python3 evaluate_baseline.py --method dumani_sentences >/dev/null
+
 # 1. Baseline
 method=zero_shot_knn
 for similarity in l2 l1 cos; do
