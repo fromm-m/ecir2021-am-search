@@ -21,5 +21,15 @@ for cluster_ratio in 0.25 0.5 1.0; do
   done
 done
 
+# 3. Baseline
+method=learned_similarity_knn
+python3 evaluate_baseline.py --method $method >/dev/null
+
+# 4. Baseline
+method=learned_similarity_cluster_knn
+for cluster_ratio in 0.25 0.5 1.0; do
+  python3 evaluate_baseline.py --method $method >/dev/null
+done
+
 time=$(date)
 echo "[DONE] ${time}"
