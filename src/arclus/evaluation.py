@@ -1,21 +1,26 @@
 import itertools
 import math
+from typing import Sequence
 
+import pandas
 import pandas as pd
-from sklearn.metrics import f1_score
 import torch
+from sklearn.metrics import f1_score
+
+from arclus.models.baselines import RankingMethod
+from arclus.utils import load_assignments_with_numeric_relevance
 
 
 def accuracy(
-        pred_y,
-        labels,
+    pred_y,
+    labels,
 ) -> torch.Tensor:
     return (pred_y == labels).sum().item() / len(pred_y)
 
 
 def f1_macro(
-        pred_y,
-        labels,
+    pred_y,
+    labels,
 ) -> float:
     return f1_score(y_pred=pred_y, y_true=labels, average='macro')
 
@@ -162,3 +167,70 @@ def best_ranking(ordered_clusters: [pd.DataFrame]) -> [int]:
         # return the relevance value of the most relevant premise in c
         ranking.append(premise_represent_gt.relevance.to_numpy(dtype=int)[0])
     return ranking
+
+
+def mdcg_score(
+    y_pred: Sequence[str],
+    data: pandas.DataFrame,
+) -> float:
+    df = pandas.DataFrame(data=dict(premise_id=y_pred))
+    df.index.name = "position"
+    df = df.reset_index()
+    df = pandas.merge(data, df, how="inner", on="premise_id").sort_values(by='position')
+    seen_clusters = set()
+    gain = 0
+    for row_id, row in df.iterrows():
+        relevance = row.relevance
+        cluster_id = row.premiseClusterID_groundTruth
+        if isinstance(cluster_id, str):
+            if cluster_id in seen_clusters:
+                relevance = 0
+            seen_clusters.add(cluster_id)
+        else:
+            assert math.isnan(cluster_id)
+        gain += relevance / math.log2(row.position + 2)
+    return gain
+
+
+def optimal_mdcg_score(
+    data: pandas.DataFrame,
+) -> float:
+    a = data[data["relevance"] > 0].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False)
+    gain = 0.
+    for i, r in enumerate(a.values.flat):
+        gain += r / math.log2(i + 2)
+    return gain
+
+
+def mndcg_score(
+    y_pred: Sequence[str],
+    data: pandas.DataFrame,
+) -> float:
+    opt_score = optimal_mdcg_score(data=data)
+    if opt_score <= 0:
+        return 0.
+    score = mdcg_score(y_pred=y_pred, data=data)
+    assert score <= opt_score
+    return score / opt_score
+
+
+def evaluate_ranking_method(
+    method: RankingMethod,
+    k: int,
+) -> pandas.DataFrame:
+    # load assignments
+    df = load_assignments_with_numeric_relevance()
+    # keep only relevant columns
+    df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth"]]
+    # iterate over all claims
+    result_data = []
+    for claim_id, queries in df.groupby(by="claim_id"):
+        # predict ranking
+        predicted_ranking = method.rank(
+            claim_id=claim_id,
+            premise_ids=queries["premise_id"].to_numpy(dtype=str),
+            k=k,
+        )
+        # evaluate ranking
+        result_data.append((claim_id, k, mndcg_score(predicted_ranking, queries)))
+    return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])

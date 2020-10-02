@@ -1,36 +1,26 @@
-import pandas
+"""Evaluation of baselines."""
+import argparse
+from datetime import datetime
 
-from arclus.models.baselines import RankingMethod
-from arclus.utils import load_assignments_with_numeric_relevance
+from arclus.evaluation import evaluate_ranking_method
+from arclus.get_similar import get_similarity_by_name
+from arclus.models.baselines import get_baseline_method_by_name
 
 
 def main():
-    algorithm = ...
-    k = ...
-
-    # load assignments
-    df = load_assignments_with_numeric_relevance()
-    # keep only relevant columns
-    df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth"]]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--method', default='zero_shot_knn', type=str)
+    parser.add_argument('--k', default=10, type=int)
+    parser.add_argument('--similarity', default='l2', type=str)
+    args = parser.parse_args()
 
     # Instantiate method
-    method: RankingMethod
-
-    # iterate over all claims
-    result_data = []
-    for claim_id, queries in df.groupby(by="claim_id"):
-        # predict ranking
-        predicted_ranking = method.rank(
-            claim_id=claim_id,
-            premise_ids=queries["premise_id"].to_numpy(dtype=str),
-            k=k,
-        )
-
-        # evaluate ranking
-        result_data.append((algorithm, claim_id, k, mndcg_score(predicted_ranking, queries)))
-    result_df = pandas.DataFrame(data=result_data, columns=["algorithm", "claim_id", "k", "mnDCG"])
-    result_df.to_csv(f"{algorithm}_results.csv")
-    print(result_df['mnDCG@k'].mean())
+    method = get_baseline_method_by_name(name=args.method, similarity=get_similarity_by_name(name=args.similarity))
+    result_df = evaluate_ranking_method(method=method, k=args.k)
+    result_df['method'] = args.method
+    result_df['similarity'] = args.similarity
+    result_df.to_csv(f'{datetime.now().strftime("%Y%m%d_%H%M%S")}_{args.method}_{args.similarity}.csv')
+    print(result_df['mnDCG'].mean())
 
 
 if __name__ == '__main__':
