@@ -1,9 +1,10 @@
 import pathlib
+import random
+import string
 import tempfile
 import unittest
-from typing import Any, Mapping, MutableMapping, Optional, Type
+from typing import Any, List, Mapping, MutableMapping, Optional, Type
 
-import numpy
 import torch
 
 from arclus.get_similar import LpSimilarity
@@ -20,6 +21,7 @@ class RankingTests:
     cls: Type[RankingMethod]
     kwargs: Optional[Mapping[str, Any]] = None
     instance: RankingMethod
+    all_premise_ids: List[str]
 
     def setUp(self):
         """Instantiate test instance."""
@@ -29,20 +31,23 @@ class RankingTests:
 
     def _pre_instantiation_hook(self, kwargs: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         """Prepare instantiation."""
+        self.all_premise_ids = [c for c in string.ascii_letters[:self.num_premises]]
         return kwargs
 
     def test_rank(self):
         """Test rank."""
-        queries = torch.randperm(self.num_claims)[:self.num_queries].tolist()
-        ranking = self.instance.rank(queries=queries, k=self.k)
-        assert isinstance(ranking, numpy.ndarray)
-        assert ranking.shape == (self.num_queries, self.k)
+        this_premise_ids = random.sample(self.all_premise_ids, 2 * self.k)
+        ranking = self.instance.rank(claim_id=0, premise_ids=this_premise_ids, k=self.k)
+        assert isinstance(ranking, (list, tuple))
+        assert len(ranking) == self.k
+        assert set(ranking).issubset(this_premise_ids)
 
 
 class ZeroShotTests(RankingTests):
     """Base class for zero-shot ranking tests."""
 
     def _pre_instantiation_hook(self, kwargs: MutableMapping[str, Any]) -> MutableMapping[str, Any]:  # noqa: D102
+        kwargs = super()._pre_instantiation_hook(kwargs=kwargs)
         kwargs['similarity'] = LpSimilarity(p=1)
 
         self.tmp_dir = tempfile.TemporaryDirectory()
@@ -50,13 +55,19 @@ class ZeroShotTests(RankingTests):
 
         # save dummy claim representations
         claims_path = tmp_path / 'claims.pt'
-        claims = torch.rand(self.num_claims, self.dim)
+        claims = {
+            claim_id: torch.rand(self.dim)
+            for claim_id in range(self.num_claims)
+        }
         torch.save(claims, claims_path)
         kwargs['claims_path'] = claims_path
 
         # save dummy premise representations
         premises_path = tmp_path / 'premises.pt'
-        premises = torch.rand(self.num_premises, self.dim)
+        premises = {
+            premise_id: torch.rand(self.dim)
+            for premise_id in self.all_premise_ids
+        }
         torch.save(premises, premises_path)
         kwargs['premises_path'] = premises_path
 
@@ -77,3 +88,6 @@ class ZeroShotClusterKNNTests(ZeroShotTests, unittest.TestCase):
     """Tests for ZeroShotClusterKNN."""
 
     cls = ZeroShotClusterKNN
+    kwargs = dict(
+        n_clusters=10,
+    )
