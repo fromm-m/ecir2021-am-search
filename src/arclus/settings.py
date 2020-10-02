@@ -37,3 +37,6 @@ PREMISES_TEST_FEATURES = DATA_ROOT / 'features' / 'premises_test_embeddings.pt'
 NEGATIVE_SAMPLES = DATA_ROOT / 'preprocessed' / 'negatives.csv'
 # one negative per positive
 NUM_NEG_PER_POS = 1
+
+# Similarities
+PREP_TEST_SIMILARITIES = DATA_ROOT / 'similarities' / 'test_similarities.pt'

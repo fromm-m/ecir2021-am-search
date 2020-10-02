@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence, Tuple
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES
 from arclus.similarity import Similarity
 from arclus.utils import get_subclass_by_name
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
@@ -203,31 +203,34 @@ class LearnedSimilarityKNN(RankingMethod):
         :param model_path:
             Directory where the fine-tuned bert similarity model checkpoint is located.
         """
+        if not PREP_TEST_SIMILARITIES.is_file():
+            logger.info('computing similarities')
+            # load bert model and the data
+            batch_size = 128
+            logger.info('Load data')
+            loader, data, model, guids = load_bert_model_and_data_no_args(
+                model_path=model_path,
+                task_name="SIM",
+                batch_size=batch_size,
+                data_dir=PREP_ASSIGNMENTS_TEST,
+                overwrite_cache=True,
+                max_seq_length=512,
+                model_type="bert",
+                cache_root=cache_root,
+            )
 
-        # load bert model and the data
-        batch_size = 128
-        logger.info('Load data')
-        loader, data, model, guids = load_bert_model_and_data_no_args(
-            model_path=model_path,
-            task_name="SIM",
-            batch_size=batch_size,
-            data_dir=PREP_ASSIGNMENTS_TEST,
-            overwrite_cache=True,
-            max_seq_length=512,
-            model_type="bert",
-            cache_root=cache_root,
-        )
+            # generate logits for all claims-premise pairs
+            # predictions = inference(args, data, loader, logger, model)
+            logger.info('Run inference')
+            predictions = inference_no_args(data=data, loader=loader, logger=logger, model=model, batch_size=batch_size)
 
-        # generate logits for all claims-premise pairs
-        # predictions = inference(args, data, loader, logger, model)
-        logger.info('Run inference')
-        predictions = inference_no_args(data=data, loader=loader, logger=logger, model=model, batch_size=batch_size)
+            # TODO: How to map guids to claim_id, premise_id?
+            # Are premise_ids unique?=
+            # d = dict(zip(guids, predictions))
+            precomputed_similarities = dict(zip(guids, predictions))
+            torch.save(precomputed_similarities, PREP_TEST_SIMILARITIES)
 
-        # TODO: How to map guids to claim_id, premise_id?
-        # Are premise_ids unique?=
-        # d = dict(zip(guids, predictions))
-
-        self.precomputed_similarities = dict(zip(guids, predictions))
+        self.precomputed_similarities = torch.load(PREP_TEST_SIMILARITIES)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # def lookup_similarity(premise_id: str) -> float:
@@ -272,7 +275,8 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         for i in sorted(range(num_premises), key=lookup_similarity, reverse=True):
             cluster_id = int(cluster_assignment[i])
             if cluster_id not in seen_clusters:
-                result.append(i)
+                premise_id = premise_ids[i]
+                result.append(premise_id)
             seen_clusters.add(cluster_id)
         return result[:k]
 
