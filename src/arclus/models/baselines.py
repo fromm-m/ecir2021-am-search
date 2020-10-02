@@ -1,3 +1,4 @@
+import inspect
 import pathlib
 from abc import ABC, abstractmethod
 from typing import Any, Mapping, Sequence
@@ -5,8 +6,8 @@ from typing import Any, Mapping, Sequence
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.similarity import Similarity
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
+from arclus.similarity import Similarity
 from arclus.utils import get_subclass_by_name
 
 
@@ -89,7 +90,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
     def __init__(
         self,
         similarity: Similarity,
-        n_clusters: int,
+        cluster_ratio: float = 0.5,
         claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
         premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
         cluster_representative: str = 'closest-to-center',
@@ -99,8 +100,8 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
         :param similarity:
             The similarity to use for the representations.
-        :param n_clusters: >0
-            The number of clusters to use.
+        :param cluster_ratio: >0
+            The relative number of clusters to use.
         :param claims_path:
             The path to the pre-computed claims representations.
         :param premises_path:
@@ -109,16 +110,8 @@ class ZeroShotClusterKNN(ZeroShotRanking):
             The method to choose a cluster representative. From {'closest-to-center', 'closest-to-claim'}.
         """
         super().__init__(similarity=similarity, claims_path=claims_path, premises_path=premises_path)
-        self.n_clusters = n_clusters
+        self.ratio = cluster_ratio
         self.cluster_representative = cluster_representative
-
-        # cluster premises
-        sorted_premise_ids = sorted(self.premises.keys())
-        premises = torch.stack([self.premises[premise_id] for premise_id in sorted_premise_ids], dim=0).numpy()
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0)
-        assignment = kmeans.fit_predict(premises).tolist()
-        self.cluster_assignment = dict(zip(sorted_premise_ids, assignment))
-        self.centroids = torch.from_numpy(kmeans.cluster_centers_)
 
     def _get_cluster_representatives(
         self,
@@ -148,6 +141,12 @@ class ZeroShotClusterKNN(ZeroShotRanking):
             repr_ids[i] = local_premise_ids[mask][idx]
         return repr_ids
 
+    def _num_clusters(self, num_premises: int, k: int) -> int:
+        n_clusters = int(round(self.ratio * num_premises))
+        n_clusters = max(n_clusters, k)
+        n_clusters = min(n_clusters, num_premises)
+        return n_clusters
+
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get the claim representation
         claim_repr = self.claims[claim_id].unsqueeze(dim=0)
@@ -156,8 +155,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
 
         # cluster premises
-        n_clusters = max(self.n_clusters, k)
-        algorithm = KMeans(n_clusters=n_clusters)
+        algorithm = KMeans(n_clusters=self._num_clusters(num_premises=len(premise_ids), k=k))
         cluster_assignment = torch.as_tensor(algorithm.fit_predict(premise_repr.numpy()))
         cluster_centers = torch.as_tensor(algorithm.cluster_centers_)
 
@@ -191,4 +189,11 @@ def get_baseline_method_by_name(
     **kwargs: Any,
 ) -> RankingMethod:
     cls = get_subclass_by_name(base_class=RankingMethod, name=name, normalizer=name_normalizer)
-    return cls(**kwargs)
+    real_kwargs = dict()
+    for key, value in kwargs.items():
+        signature = inspect.signature(cls.__init__)
+        if key in signature.parameters:
+            real_kwargs[key] = value
+        else:
+            print(f"Unused argument {key}={value}")
+    return cls(**real_kwargs)
