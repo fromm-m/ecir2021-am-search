@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--similarity', default=None, type=str)
     parser.add_argument('--cluster_ratio', default=None, type=float)
     parser.add_argument('--cluster_representative', default=None, type=str, choices=['closest-to-center', 'closest-to-claim'])
+    parser.add_argument('--force', action='store_true', default=False)
     args = parser.parse_args()
     config = dict(
         method=args.method,
@@ -32,7 +33,7 @@ def main():
     hash_digest = sha512(str(sorted(config.items())).encode(encoding='utf8')).hexdigest()[:20]
     output_path = output_root / f'{hash_digest}.tsv'
     print('Output to', output_path)
-    if output_path.is_file():
+    if output_path.is_file() and not args.force:
         quit(0)
 
     # Instantiate method
