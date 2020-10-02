@@ -1,6 +1,8 @@
 import logging
 import os
 import random
+from logging import Logger
+from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -16,22 +18,56 @@ from transformers.data.processors import DataProcessor, InputExample, InputFeatu
 logger = logging.getLogger(__name__)
 
 
-def load_bert_model_and_data(args):
-    tokenizer = BertTokenizer.from_pretrained(args.model_path)
-    bert_model = BertForSequenceClassification.from_pretrained(args.model_path)
-    data, examples = load_and_cache_examples(args, args.task_name, tokenizer)
+def load_bert_model_and_data_no_args(
+    model_path: str,
+    task_name: str,
+    batch_size: int,
+    data_dir: str,
+    overwrite_cache: bool,
+    max_seq_length: int,
+    model_type: str,
+) -> Tuple[DataLoader, TensorDataset, BertForSequenceClassification, List[Any]]:
+    tokenizer = BertTokenizer.from_pretrained(model_path)
+    bert_model = BertForSequenceClassification.from_pretrained(model_path)
+    data, examples = load_and_cache_examples(
+        task=task_name,
+        tokenizer=tokenizer,
+        model_path=model_path,
+        data_dir=data_dir,
+        overwrite_cache=overwrite_cache,
+        max_seq_length=max_seq_length,
+        model_type=model_type,
+    )
     sampler = SequentialSampler(data)
     guids = [o.guid for o in examples]
-    return DataLoader(data, sampler=sampler, batch_size=args.batch_size), data, bert_model, guids
+    return DataLoader(data, sampler=sampler, batch_size=batch_size), data, bert_model, guids
+
+
+def load_bert_model_and_data(args):
+    return load_bert_model_and_data_no_args(
+        model_path=args.model_path,
+        task_name=args.task_name,
+        batch_size=args.batch_size,
+        data_dir=args.data_dir,
+        overwrite_cache=args.overwrite_cache,
+        max_seq_length=args.max_seq_length,
+        model_type=args.model_type,
+    )
 
 
 @torch.no_grad()
-def inference(args, data, loader, logger, model):
+def inference_no_args(
+    data: TensorDataset,
+    loader: DataLoader,
+    logger: Logger,
+    model: BertForSequenceClassification,
+    batch_size: int,
+) -> List[float]:
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     predictions = []
     logger.info("***** Running inference {} *****".format(""))
     logger.info("  Num examples = %d", len(data))
-    logger.info("  Batch size = %d", args.batch_size)
+    logger.info("  Batch size = %d", batch_size)
     model.to(device)
     model.eval()
     for batch in tqdm(loader, desc="Inference"):
@@ -39,10 +75,22 @@ def inference(args, data, loader, logger, model):
         inputs = {'input_ids': batch[0],
                   'attention_mask': batch[1],
                   'token_type_ids': batch[2], }
+        # logits = outputs[0].cpu().numpy()[:, 1]
         outputs = model(**inputs)
-        logits = outputs[0].cpu().numpy()[:, 1]
+        logits = outputs[0].log_softmax(dim=-1)[:, 1]
         predictions.extend(logits.tolist())
     return predictions
+
+
+@torch.no_grad()
+def inference(args, data, loader, logger, model):
+    return inference_no_args(
+        data=data,
+        loader=loader,
+        logger=logger,
+        model=model,
+        batch_size=args.batch_size,
+    )
 
 
 def set_seed(args):
@@ -53,7 +101,15 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def load_and_cache_examples(args, task, tokenizer):
+def load_and_cache_examples(
+    task: str,
+    tokenizer: BertTokenizer,
+    model_path: str,
+    data_dir: str,
+    overwrite_cache: bool,
+    max_seq_length: int,
+    model_type: str,
+):
     processor = processors[task]()
     output_mode = output_modes[task]
     # if args.active_learning:
@@ -61,26 +117,27 @@ def load_and_cache_examples(args, task, tokenizer):
     # Load data features from cache or dataset file
     # if active learning, the train data will be saved inside each learning iteration directory
     cached_features_file = os.path.join("../../data/preprocessed", "cached_{}_{}_{}".format("inference", list(
-        filter(None, args.model_path.split("/"))).pop(), str(task), ), )
+        filter(None, model_path.split("/"))).pop(), str(task), ), )
 
-    if os.path.exists(cached_features_file) and not args.overwrite_cache:
+    if os.path.exists(cached_features_file) and not overwrite_cache:
         logger.info("Loading features from cached file %s", cached_features_file)
         features = torch.load(cached_features_file)
+        examples = None
     else:
-        logger.info("Creating features from dataset file at %s", args.data_dir)
+        logger.info("Creating features from dataset file at %s", data_dir)
         label_list = processor.get_labels()
-        examples = processor.get_examples(args)
+        examples = processor.get_examples(data_dir=data_dir)
         log_param("  Num examples training", len(examples))
 
         features = convert_examples_to_features(
             examples,
             tokenizer,
             label_list=label_list,
-            max_length=args.max_seq_length,
+            max_length=max_seq_length,
             output_mode=output_mode,
-            pad_on_left=bool(args.model_type in ["xlnet"]),
+            pad_on_left=bool(model_type in ["xlnet"]),
             pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-            pad_token_segment_id=4 if args.model_type in ["xlnet"] else 0,
+            pad_token_segment_id=4 if model_type in ["xlnet"] else 0,
         )
         logger.info("Saving features into cached file %s", cached_features_file)
         torch.save(features, cached_features_file)
@@ -221,8 +278,8 @@ def convert_examples_to_features(
 class SimilarityProcessor(DataProcessor):
     """Processor for the AM data set."""
 
-    def get_examples(self, args):
-        df = self.read_tsv(args.data_dir)
+    def get_examples(self, data_dir: str):
+        df = self.read_tsv(data_dir)
         return self._create_examples(df)
 
     def get_labels(self):
