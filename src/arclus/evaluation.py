@@ -253,12 +253,20 @@ def evaluate_ranking_method_related_work(
     assert method in {'sentences', 'slidingWindow', 'first512Tokens'}
     # keep only relevant columns
     method_col = f"P(\pi_j|q)_{method}"
-    df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth", method_col]]
+    cluster_col = f"premiseClusterID_{method}"
+    df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth", method_col, cluster_col]]
     # iterate over all claims
     result_data = []
     for claim_id, queries in tqdm(df.groupby(by="claim_id"), unit='claim'):
         for kk in k:
-            predicted_ranking = queries.sort_values(by=method_col, ascending=False)['premise_id'].tolist()[:kk]
+            predicted_ranking = []
+            seen_cluster = set()
+            for _, row in queries.sort_values(by=method_col, ascending=False).iterrows():
+                cluster_id = row[cluster_col]
+                if cluster_id not in seen_cluster:
+                    predicted_ranking.append(row['premise_id'])
+                    seen_cluster.add(cluster_id)
+            predicted_ranking = predicted_ranking[:kk]
             # evaluate ranking
             result_data.append((claim_id, kk, mndcg_score(predicted_ranking, queries)))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
