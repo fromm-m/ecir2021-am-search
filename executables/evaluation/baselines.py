@@ -3,7 +3,7 @@ import argparse
 from datetime import datetime
 
 from arclus.evaluation import evaluate_ranking_method
-from arclus.get_similar import get_similarity_by_name
+from arclus.similarity import get_similarity_by_name
 from arclus.models.baselines import get_baseline_method_by_name
 
 

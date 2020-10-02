@@ -5,7 +5,7 @@ from typing import Any, Mapping, Sequence
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.get_similar import Similarity
+from arclus.similarity import Similarity
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
 from arclus.utils import get_subclass_by_name
 

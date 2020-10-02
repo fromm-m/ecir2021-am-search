@@ -4,7 +4,7 @@ from typing import Any, Mapping, Type
 
 import torch
 
-from arclus.get_similar import CSLSSimilarity, CosineSimilarity, LpSimilarity, Similarity
+from arclus.similarity import CSLSSimilarity, CosineSimilarity, LpSimilarity, Similarity
 
 
 class SimilarityTests:

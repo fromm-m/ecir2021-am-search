@@ -1,6 +1,6 @@
 from sklearn.cluster import KMeans
 import torch
-from arclus.get_similar import LpSimilarity, get_most_similar
+from arclus.similarity import LpSimilarity, get_most_similar
 import numpy as np
 
 

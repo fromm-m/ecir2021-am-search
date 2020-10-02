@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 from arclus.utils_am import load_bert_model_and_data, inference
 from arclus.utils_clustering import clustering
 from arclus.evaluation import best_ranking, ndcg_score, split_clusters, evaluate_premises
-from arclus.get_similar import LpSimilarity, get_most_similar
+from arclus.similarity import LpSimilarity, get_most_similar
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST
 from arclus.utils import load_assignments_with_numeric_relevance
 
