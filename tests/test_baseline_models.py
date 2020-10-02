@@ -8,7 +8,7 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Type
 import torch
 
 from arclus.get_similar import LpSimilarity
-from arclus.models.baselines import RankingMethod, ZeroShotClusterKNN, ZeroShotKNN
+from arclus.models.baselines import RankingMethod, ZeroShotClusterKNN, ZeroShotKNN, get_baseline_method_by_name
 
 
 class RankingTests:
@@ -41,6 +41,11 @@ class RankingTests:
         assert isinstance(ranking, (list, tuple))
         assert len(ranking) == self.k
         assert set(ranking).issubset(this_premise_ids)
+
+    def test_get_baseline_method_by_name(self):
+        """Test get_baseline_method_by_name."""
+        method = get_baseline_method_by_name(name=self.cls.__name__, **self.kwargs)
+        assert method.__class__ is self.cls
 
 
 class ZeroShotTests(RankingTests):

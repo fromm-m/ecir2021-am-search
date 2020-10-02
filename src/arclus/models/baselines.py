@@ -1,12 +1,13 @@
 import pathlib
 from abc import ABC, abstractmethod
-from typing import List, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import torch
 from sklearn.cluster import KMeans
 
 from arclus.get_similar import Similarity
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
+from arclus.utils import get_subclass_by_name
 
 
 class RankingMethod:
@@ -179,3 +180,15 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids]
+
+
+def name_normalizer(name: str) -> str:
+    return name.lower().replace('_', '')
+
+
+def get_baseline_method_by_name(
+    name: str,
+    **kwargs: Any,
+) -> RankingMethod:
+    cls = get_subclass_by_name(base_class=RankingMethod, name=name, normalizer=name_normalizer)
+    return cls(**kwargs)
