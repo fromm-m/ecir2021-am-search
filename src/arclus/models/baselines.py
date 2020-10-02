@@ -1,14 +1,19 @@
 import inspect
+import logging
 import pathlib
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, Sequence
+from logging import Logger
+from typing import Any, Mapping, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST
 from arclus.similarity import Similarity
 from arclus.utils import get_subclass_by_name
+from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
+
+logger: Logger = logging.getLogger(__name__)
 
 
 class RankingMethod:
@@ -179,6 +184,56 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids]
+
+
+class LearnedSimilarityKNN(RankingMethod):
+    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
+
+    #: The precomputed similarities.
+    precomputed_similarities: Mapping[Tuple[int, str], float]
+
+    def __init__(
+        self,
+        model_path: str,
+    ):
+        """
+        Initialize the method.
+
+        :param model_path:
+            Directory where the fine-tuned bert similarity model checkpoint is located.
+        """
+
+        # load bert model and the data
+        batch_size = 128
+        loader, data, model, guids = load_bert_model_and_data_no_args(
+            model_path=model_path,
+            task_name="SIM",
+            batch_size=batch_size,
+            data_dir=PREP_ASSIGNMENTS_TEST,
+            overwrite_cache=True,
+            max_seq_length=512,
+            model_type="bert",
+        )
+
+        # generate logits for all claims-premise pairs
+        # predictions = inference(args, data, loader, logger, model)
+        predictions = inference_no_args(data=data, loader=loader, logger=logger, model=model, batch_size=batch_size)
+
+        # TODO: How to map guids to claim_id, premise_id?
+        # Are premise_ids unique?=
+        # d = dict(zip(guids, predictions))
+
+        self.precomputed_similarities = dict(zip(guids, predictions))
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        # def lookup_similarity(premise_id: str) -> float:
+        #     return self.precomputed_similarities[claim_id, premise_id]
+
+        # TODO: Why don't we need the claim_id?
+        def lookup_similarity(premise_id: str) -> float:
+            return self.precomputed_similarities[premise_id]
+
+        return sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
 
 
 def name_normalizer(name: str) -> str:
