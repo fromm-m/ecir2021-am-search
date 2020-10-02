@@ -7,8 +7,8 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Type
 
 import torch
 
-from arclus.similarity import LpSimilarity
 from arclus.models.baselines import RankingMethod, ZeroShotClusterKNN, ZeroShotKNN, get_baseline_method_by_name
+from arclus.similarity import LpSimilarity
 
 
 class RankingTests:
@@ -94,5 +94,15 @@ class ZeroShotClusterKNNTests(ZeroShotTests, unittest.TestCase):
 
     cls = ZeroShotClusterKNN
     kwargs = dict(
-        n_clusters=10,
+        cluster_ratio=0.5,
+    )
+
+
+class ZeroShotClusterKNNTests2(ZeroShotTests, unittest.TestCase):
+    """Tests for ZeroShotClusterKNN."""
+
+    cls = ZeroShotClusterKNN
+    kwargs = dict(
+        cluster_ratio=1.0,
+        cluster_representative='closest-to-claim',
     )
