@@ -6,21 +6,22 @@ import pandas
 import pandas as pd
 import torch
 from sklearn.metrics import f1_score
+from tqdm import tqdm
 
 from arclus.models.baselines import RankingMethod
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
 def accuracy(
-        pred_y,
-        labels,
+    pred_y,
+    labels,
 ) -> torch.Tensor:
     return (pred_y == labels).sum().item() / len(pred_y)
 
 
 def f1_macro(
-        pred_y,
-        labels,
+    pred_y,
+    labels,
 ) -> float:
     return f1_score(y_pred=pred_y, y_true=labels, average='macro')
 
@@ -227,7 +228,7 @@ def evaluate_ranking_method(
     df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth"]]
     # iterate over all claims
     result_data = []
-    for claim_id, queries in df.groupby(by="claim_id"):
+    for claim_id, queries in tqdm(df.groupby(by="claim_id"), unit='claim'):
         for kk in k:
             # predict ranking
             predicted_ranking = method.rank(
