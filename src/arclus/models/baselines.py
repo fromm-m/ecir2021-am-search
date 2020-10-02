@@ -77,7 +77,7 @@ class ZeroShotKNN(ZeroShotRanking):
         top_ids = self.similarity.sim(
             claims=claim_repr,
             premises=premise_repr,
-        ).topk(k=k, largest=True, sorted=True).indices
+        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids.tolist()]
 
@@ -172,7 +172,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         top_cluster_id = self.similarity.sim(
             claims=claim_repr,
             premises=premise_repr[cluster_repr_id],
-        ).topk(k=k, largest=True, sorted=True).indices
+        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
 
         # re-translate to local (batch) premise ID
         top_ids = [cluster_repr_id[i] for i in top_cluster_id.tolist()]
