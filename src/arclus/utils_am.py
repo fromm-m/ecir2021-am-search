@@ -1,18 +1,17 @@
 import logging
 import os
-from transformers.data.processors import InputExample, InputFeatures, DataProcessor
-from torch.utils.data import TensorDataset
-from scipy.stats import pearsonr, spearmanr
-from sklearn.metrics import f1_score
-from sklearn.metrics import confusion_matrix
-import pandas as pd
 import random
+
 import numpy as np
-from mlflow import log_param
-from transformers import BertTokenizer, BertForSequenceClassification
+import pandas as pd
 import torch
+from mlflow import log_param
+from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import confusion_matrix, f1_score
+from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from tqdm import tqdm
-from torch.utils.data import (DataLoader, SequentialSampler)
+from transformers import BertForSequenceClassification, BertTokenizer
+from transformers.data.processors import DataProcessor, InputExample, InputFeatures
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,7 @@ def load_bert_model_and_data(args):
     sampler = SequentialSampler(data)
     guids = [o.guid for o in examples]
     return DataLoader(data, sampler=sampler, batch_size=args.batch_size), data, bert_model, guids
+
 
 @torch.no_grad()
 def inference(args, data, loader, logger, model):
@@ -86,11 +86,11 @@ def load_and_cache_examples(args, task, tokenizer):
         torch.save(features, cached_features_file)
 
     # Convert to Tensors and build dataset
-    all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
-    all_attention_mask = torch.tensor(
+    all_input_ids = torch.as_tensor([f.input_ids for f in features], dtype=torch.long)
+    all_attention_mask = torch.as_tensor(
         [f.attention_mask for f in features], dtype=torch.long
     )
-    all_token_type_ids = torch.tensor(
+    all_token_type_ids = torch.as_tensor(
         [f.token_type_ids for f in features], dtype=torch.long
     )
     #    if output_mode == "classification":
@@ -105,16 +105,16 @@ def load_and_cache_examples(args, task, tokenizer):
 
 
 def convert_examples_to_features(
-        examples,
-        tokenizer,
-        max_length=512,
-        task=None,
-        label_list=None,
-        output_mode=None,
-        pad_on_left=False,
-        pad_token=0,
-        pad_token_segment_id=0,
-        mask_padding_with_zero=True,
+    examples,
+    tokenizer,
+    max_length=512,
+    task=None,
+    label_list=None,
+    output_mode=None,
+    pad_on_left=False,
+    pad_token=0,
+    pad_token_segment_id=0,
+    mask_padding_with_zero=True,
 ):
     """
     Loads a data file into a list of ``InputFeatures``

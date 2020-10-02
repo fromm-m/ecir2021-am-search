@@ -1,7 +1,8 @@
-from sklearn.cluster import KMeans
-import torch
-from arclus.similarity import LpSimilarity, get_most_similar
 import numpy as np
+import torch
+from sklearn.cluster import KMeans
+
+from arclus.similarity import LpSimilarity, get_most_similar
 
 
 def clustering(args, claim_representation, premise_representations):

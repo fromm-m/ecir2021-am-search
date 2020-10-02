@@ -1,17 +1,16 @@
 import argparse
-
 import logging
 from logging import Logger
+
 import numpy as np
 import torch
-from sklearn.cluster import KMeans
 
-from arclus.utils_am import load_bert_model_and_data, inference
-from arclus.utils_clustering import clustering
-from arclus.evaluation import best_ranking, ndcg_score, split_clusters, evaluate_premises
-from arclus.similarity import LpSimilarity, get_most_similar
+from arclus.evaluation import best_ranking, evaluate_premises, ndcg_score, split_clusters
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST
+from arclus.similarity import LpSimilarity, get_most_similar
 from arclus.utils import load_assignments_with_numeric_relevance
+from arclus.utils_am import inference, load_bert_model_and_data
+from arclus.utils_clustering import clustering
 
 
 def main():

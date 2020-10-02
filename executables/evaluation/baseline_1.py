@@ -4,8 +4,8 @@ import numpy as np
 import torch
 
 from arclus.evaluation import best_ranking, evaluate_premises, ndcg_score, split_clusters
-from arclus.similarity import LpSimilarity, get_most_similar
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES
+from arclus.similarity import LpSimilarity, get_most_similar
 from arclus.utils import load_assignments_with_numeric_relevance
 
 
