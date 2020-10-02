@@ -1,6 +1,6 @@
 import itertools
 import math
-from typing import Sequence
+from typing import Collection, Sequence, Union
 
 import pandas
 import pandas as pd
@@ -216,8 +216,11 @@ def mndcg_score(
 
 def evaluate_ranking_method(
     method: RankingMethod,
-    k: int,
+    k: Union[int, Collection[int]],
 ) -> pandas.DataFrame:
+    # Input normalization
+    if isinstance(k, int):
+        k = [k]
     # load assignments
     df = load_assignments_with_numeric_relevance()
     # keep only relevant columns
@@ -225,12 +228,13 @@ def evaluate_ranking_method(
     # iterate over all claims
     result_data = []
     for claim_id, queries in df.groupby(by="claim_id"):
-        # predict ranking
-        predicted_ranking = method.rank(
-            claim_id=claim_id,
-            premise_ids=queries["premise_id"].to_numpy(dtype=str),
-            k=k,
-        )
-        # evaluate ranking
-        result_data.append((claim_id, k, mndcg_score(predicted_ranking, queries)))
+        for kk in k:
+            # predict ranking
+            predicted_ranking = method.rank(
+                claim_id=claim_id,
+                premise_ids=queries["premise_id"].to_numpy(dtype=str),
+                k=kk,
+            )
+            # evaluate ranking
+            result_data.append((claim_id, kk, mndcg_score(predicted_ranking, queries)))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
