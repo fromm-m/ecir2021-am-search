@@ -1,3 +1,4 @@
+"""Evaluation utilities."""
 import math
 from typing import Collection, Sequence, Union
 
