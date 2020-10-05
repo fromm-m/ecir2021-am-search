@@ -198,7 +198,7 @@ def optimal_mdcg_score(
     data: pandas.DataFrame,
     k: int,
 ) -> float:
-    a = data[data["relevance"] > 0].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False)
+    a = data[data["relevance"] > 0].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False).astype(float)
     gain = 0.
     for i, r in zip(range(k), a.values.flat):
         gain += r / math.log2(i + 2)

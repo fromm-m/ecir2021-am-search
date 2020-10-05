@@ -1,10 +1,11 @@
 """Tests for evaluation methods."""
+import math
 import unittest
 
 import numpy
 import pandas
 
-from arclus.evaluation import mndcg_score
+from arclus.evaluation import mndcg_score, optimal_mdcg_score
 from arclus.utils import generate_random_words
 
 
@@ -42,3 +43,38 @@ class MNDCGTests(unittest.TestCase):
 
         # check value range
         assert 0 <= score <= 1.
+
+    def test_optimal_score_manual(self):
+        """Manually test optimal_score."""
+        test_data = pandas.DataFrame(
+            data=dict(
+                relevance=[
+                    0,
+                    1,
+                    1,
+                    1,
+                    2,
+                    2,
+                    2,
+                    0,
+                ],
+                premiseClusterID_groundTruth=[
+                    'a',
+                    'a',
+                    'a',
+                    'b',
+                    'b',
+                    'c',
+                    'c',
+                    'z',
+                ]
+            )
+        )
+        # optimal ranking: (c, 2), (b, 2), (a, 1)
+        # expected_score
+        expected_score = (numpy.asarray([2, 2, 1], dtype=float) / numpy.log2(2 + numpy.arange(3))).sum()
+        optimal_score = optimal_mdcg_score(
+            data=test_data,
+            k=3,
+        )
+        self.assertAlmostEqual(expected_score, optimal_score)
