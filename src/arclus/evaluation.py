@@ -175,20 +175,32 @@ def mdcg_score(
     data: pandas.DataFrame,
     k: int,
 ) -> float:
+    """
+    Calculate the modified DCG score.
+
+    :param y_pred:
+        The predicted ranking, a sequence of premise IDs.
+    :param data:
+        The data, comprises at least columns "premise_id", "relevance", and "premiseClusterID_groundTruth".
+    :param k: >0
+        The cut-off parameter.
+
+    :return:
+        A non-negative scalar value.
+    """
     df = pandas.DataFrame(data=dict(premise_id=y_pred))
     df.index.name = "position"
     df = df.reset_index()
     df = pandas.merge(data, df, how="inner", on="premise_id").sort_values(by='position')
     seen_clusters = set()
     gain = 0
-    for i, (row_id, row) in zip(range(k), df.iterrows()):
-        relevance = row.relevance
-        cluster_id = row.premiseClusterID_groundTruth
+    for i, relevance, cluster_id in zip(range(k), df["relevance"], df["premiseClusterID_groundTruth"]):
         if isinstance(cluster_id, str):
             if cluster_id in seen_clusters:
                 relevance = 0
             seen_clusters.add(cluster_id)
         else:
+            # only premises with relevance are assigned to clusters
             assert math.isnan(cluster_id)
         gain += relevance / math.log2(i + 2)
     return gain
@@ -198,6 +210,17 @@ def optimal_mdcg_score(
     data: pandas.DataFrame,
     k: int,
 ) -> float:
+    """
+    Calculate the optimal mDCG score for the given relevance/cluster data.
+
+    :param data:
+        The data, comprises at least columns "relevance", and "premiseClusterID_groundTruth".
+    :param k:
+        The cut-off parameter k.
+
+    :return:
+        The optimal value of mDCG@k.
+    """
     a = data[data["relevance"] > 0].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False).astype(float)
     gain = 0.
     for i, r in zip(range(k), a.values.flat):
@@ -210,6 +233,19 @@ def mndcg_score(
     data: pandas.DataFrame,
     k: int,
 ) -> float:
+    """
+    Calculate the modified NDCG score.
+
+    :param y_pred:
+        The predicted ranking, a sequence of premise IDs.
+    :param data:
+        The data, comprises at least columns "premise_id", "relevance", and "premiseClusterID_groundTruth".
+    :param k: >0
+        The cut-off parameter.
+
+    :return:
+        The modified NDCG score, a scalar between 0 and 1 (both incl.).
+    """
     opt_score = optimal_mdcg_score(data=data, k=k)
     if opt_score <= 0:
         return 0.
