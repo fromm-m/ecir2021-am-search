@@ -13,6 +13,7 @@ from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_A
 from arclus.similarity import Similarity
 from arclus.utils import get_subclass_by_name
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
+from .dumani import Dumani
 
 logger: Logger = logging.getLogger(__name__)
 

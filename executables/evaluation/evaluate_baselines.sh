@@ -7,7 +7,7 @@ echo "[START] ${start_time}"
 method=dumani
 for column in first512Tokens slidingWindow sentences; do
   echo "$method $column"
-  python3 evaluate_baseline.py --method dumani_$method --column $column >/dev/null
+  python3 evaluate_baseline.py --method $method --column $column >/dev/null
 done
 
 # 1. Baseline
