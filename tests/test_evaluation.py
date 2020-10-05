@@ -1,3 +1,4 @@
+"""Tests for evaluation methods."""
 import unittest
 
 import numpy
@@ -8,7 +9,7 @@ from arclus.utils import generate_random_words
 
 
 class MNDCGTests(unittest.TestCase):
-    """Tests for computation of mpodified NDCG score."""
+    """Tests for computation of modified NDCG score."""
 
     num_premises: int = 13
     k: int = 5
