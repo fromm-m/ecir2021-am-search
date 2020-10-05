@@ -4,11 +4,10 @@ start_time=$(date)
 echo "[START] ${start_time}"
 
 # 0. Dumani et al.
-for method in first512Tokens slidingWindow sentences; do
-  for column in 'P(\pi_j|q)' 'P(p|q)'; do
-    echo "$method $column"
-    python3 evaluate_baseline.py --method dumani_$method --similarity $column >/dev/null
-  done
+method=dumani
+for column in first512Tokens slidingWindow sentences; do
+  echo "$method $column"
+  python3 evaluate_baseline.py --method dumani_$method --column $column >/dev/null
 done
 
 # 1. Baseline
@@ -33,7 +32,7 @@ done
 method=learned_similarity_knn
 for softmax in True False; do
   echo "$method $softmax"
-  python3 evaluate_baseline.py --method $method  --softmax $softmax >/dev/null
+  python3 evaluate_baseline.py --method $method --softmax $softmax >/dev/null
 done
 
 # 4. Baseline
