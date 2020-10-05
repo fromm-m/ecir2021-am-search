@@ -240,7 +240,8 @@ def evaluate_ranking_method(
                 k=kk,
             )
             # evaluate ranking
-            result_data.append((claim_id, kk, mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)))
+            score = mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)
+            result_data.append((claim_id, kk, score))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
 
 
@@ -272,5 +273,6 @@ def evaluate_ranking_method_related_work(
                     seen_cluster.add(cluster_id)
             predicted_ranking = predicted_ranking[:kk]
             # evaluate ranking
-            result_data.append((claim_id, kk, mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)))
+            score = mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)
+            result_data.append((claim_id, kk, score))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
