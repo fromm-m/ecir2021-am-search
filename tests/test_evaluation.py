@@ -49,24 +49,10 @@ class MNDCGTests(unittest.TestCase):
         test_data = pandas.DataFrame(
             data=dict(
                 relevance=[
-                    0,
-                    1,
-                    1,
-                    1,
-                    2,
-                    2,
-                    2,
-                    0,
+                    0, 1, 1, 1, 2, 2, 2, 0,
                 ],
                 premiseClusterID_groundTruth=[
-                    'a',
-                    'a',
-                    'a',
-                    'b',
-                    'b',
-                    'c',
-                    'c',
-                    'z',
+                    'a', 'a', 'a', 'b', 'b', 'c', 'c', 'z',
                 ]
             )
         )
