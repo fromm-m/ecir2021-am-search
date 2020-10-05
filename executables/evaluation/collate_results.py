@@ -17,7 +17,7 @@ def main():
     df = pandas.concat(
         objs=[pandas.read_csv(file_path, sep='\t') for file_path in files],
         ignore_index=True,
-    ).fillna('None')
+    ).fillna('')
     summary = df.groupby(
         by=[
             'method',
