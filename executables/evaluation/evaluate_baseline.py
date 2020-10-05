@@ -7,6 +7,7 @@ from hashlib import sha512
 from arclus.evaluation import evaluate_ranking_method, evaluate_ranking_method_related_work
 from arclus.models.baselines import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
+from arclus.utils import argparse_bool
 
 
 def main():
@@ -16,7 +17,7 @@ def main():
     parser.add_argument('--method', default='zero_shot_knn', type=str)
     parser.add_argument('--k', default=[5, 10], type=int)
     parser.add_argument('--similarity', default=None, type=str)
-    parser.add_argument('--softmax', default=None, type=bool)
+    parser.add_argument('--softmax', default=None, type=argparse_bool)
     parser.add_argument('--cluster_ratio', default=None, type=float)
     parser.add_argument('--cluster_representative', default=None, type=str, choices=['closest-to-center', 'closest-to-claim'])
     parser.add_argument('--force', action='store_true', default=False)

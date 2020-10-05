@@ -209,6 +209,7 @@ class LearnedSimilarityKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         buffer_path = PREP_TEST_SIMILARITIES_SOFTMAX if softmax else PREP_TEST_SIMILARITIES
+        logger.info(f'Using softmax: {softmax}')
         if not buffer_path.is_file():
             logger.info('computing similarities')
             # load bert model and the data

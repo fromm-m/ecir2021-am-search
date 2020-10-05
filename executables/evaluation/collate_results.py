@@ -14,16 +14,23 @@ def main():
     if len(files) == 0:
         print('no input files')
         quit(-1)
+    adf = []
+    for file_path in files:
+        df = pandas.read_csv(file_path, sep='\t')
+        df['file_path'] = file_path
+        adf.append(df)
     df = pandas.concat(
-        objs=[pandas.read_csv(file_path, sep='\t') for file_path in files],
+        objs=adf,
         ignore_index=True,
     ).fillna('')
+    df['softmax'] = df['softmax'].apply(lambda x: True if x == 1.0 else (False if x == 0.0 else ''))
     summary = df.groupby(
         by=[
             'method',
             'similarity',
             'cluster_ratio',
             'cluster_representative',
+            'softmax',
             'k',
         ]).agg(dict(mnDCG='mean'))
     summary = summary.unstack()

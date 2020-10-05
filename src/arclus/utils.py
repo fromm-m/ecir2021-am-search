@@ -175,3 +175,8 @@ def generate_random_words(num_words, max_word_length: int = 10) -> List[str]:
         "".join(random.choices(string.ascii_letters, k=random.randrange(1, max_word_length)))
         for _ in range(num_words)
     ]
+
+
+def argparse_bool(x):
+    """Convert a command line arguments for a boolean value."""
+    return str(x).lower() in {'true', '1', 'yes'}
