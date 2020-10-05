@@ -173,6 +173,7 @@ def best_ranking(ordered_clusters: [pd.DataFrame]) -> [int]:
 def mdcg_score(
     y_pred: Sequence[str],
     data: pandas.DataFrame,
+    k: int,
 ) -> float:
     df = pandas.DataFrame(data=dict(premise_id=y_pred))
     df.index.name = "position"
@@ -180,7 +181,7 @@ def mdcg_score(
     df = pandas.merge(data, df, how="inner", on="premise_id").sort_values(by='position')
     seen_clusters = set()
     gain = 0
-    for row_id, row in df.iterrows():
+    for i, (row_id, row) in zip(range(k), df.iterrows()):
         relevance = row.relevance
         cluster_id = row.premiseClusterID_groundTruth
         if isinstance(cluster_id, str):
@@ -189,16 +190,17 @@ def mdcg_score(
             seen_clusters.add(cluster_id)
         else:
             assert math.isnan(cluster_id)
-        gain += relevance / math.log2(row.position + 2)
+        gain += relevance / math.log2(i + 2)
     return gain
 
 
 def optimal_mdcg_score(
     data: pandas.DataFrame,
+    k: int,
 ) -> float:
     a = data[data["relevance"] > 0].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False)
     gain = 0.
-    for i, r in enumerate(a.values.flat):
+    for i, r in zip(range(k), a.values.flat):
         gain += r / math.log2(i + 2)
     return gain
 
@@ -206,11 +208,12 @@ def optimal_mdcg_score(
 def mndcg_score(
     y_pred: Sequence[str],
     data: pandas.DataFrame,
+    k: int,
 ) -> float:
-    opt_score = optimal_mdcg_score(data=data)
+    opt_score = optimal_mdcg_score(data=data, k=k)
     if opt_score <= 0:
         return 0.
-    score = mdcg_score(y_pred=y_pred, data=data)
+    score = mdcg_score(y_pred=y_pred, data=data, k=k)
     assert score <= opt_score
     return score / opt_score
 
@@ -237,7 +240,7 @@ def evaluate_ranking_method(
                 k=kk,
             )
             # evaluate ranking
-            result_data.append((claim_id, kk, mndcg_score(predicted_ranking, queries)))
+            result_data.append((claim_id, kk, mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
 
 
@@ -268,5 +271,5 @@ def evaluate_ranking_method_related_work(
                     seen_cluster.add(cluster_id)
             predicted_ranking = predicted_ranking[:kk]
             # evaluate ranking
-            result_data.append((claim_id, kk, mndcg_score(predicted_ranking, queries)))
+            result_data.append((claim_id, kk, mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
