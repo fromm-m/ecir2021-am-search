@@ -1,45 +1,20 @@
 import inspect
 import logging
 import pathlib
-from abc import ABC, abstractmethod
+from abc import ABC
 from logging import Logger
 from typing import Any, Mapping, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
 
+from arclus.models.base import RankingMethod
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES, PREP_TEST_SIMILARITIES_SOFTMAX
 from arclus.similarity import Similarity
 from arclus.utils import get_subclass_by_name
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
 
 logger: Logger = logging.getLogger(__name__)
-
-
-class RankingMethod:
-    """Base class for ranking methods."""
-
-    @abstractmethod
-    def rank(
-        self,
-        claim_id: int,
-        premise_ids: Sequence[str],
-        k: int,
-    ) -> Sequence[str]:
-        """
-        Return a sorted list of k premise IDs for each query claim.
-
-        :param claim_id:
-            The query claim ID.
-        :param premise_ids:
-            The candidate premise IDs.
-        :param k: >0
-            The number of premises to return for each claim.
-
-        :return:
-            The sorted list of k premise IDs for each query claim.
-        """
-        raise NotImplementedError
 
 
 class ZeroShotRanking(RankingMethod, ABC):

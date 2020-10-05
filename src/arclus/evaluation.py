@@ -7,7 +7,7 @@ import torch
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 
-from arclus.models.baselines import RankingMethod
+from arclus.models.base import RankingMethod
 from arclus.utils import load_assignments_with_numeric_relevance
 
 

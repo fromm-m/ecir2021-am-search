@@ -7,7 +7,8 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Type
 
 import torch
 
-from arclus.models.baselines import RankingMethod, ZeroShotClusterKNN, ZeroShotKNN, get_baseline_method_by_name
+from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, get_baseline_method_by_name
+from arclus.models.base import RankingMethod
 from arclus.similarity import LpSimilarity
 
 
