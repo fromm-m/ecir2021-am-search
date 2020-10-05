@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--method', default='zero_shot_knn', type=str)
     parser.add_argument('--k', default=[5, 10], type=int)
     parser.add_argument('--similarity', default=None, type=str)
+    parser.add_argument('--softmax', default=None, type=bool)
     parser.add_argument('--cluster_ratio', default=None, type=float)
     parser.add_argument('--cluster_representative', default=None, type=str, choices=['closest-to-center', 'closest-to-claim'])
     parser.add_argument('--force', action='store_true', default=False)
@@ -25,6 +26,7 @@ def main():
         similarity=args.similarity,
         cluster_ratio=args.cluster_ratio,
         cluster_representative=args.cluster_representative,
+        softmax=args.softmax,
     )
 
     output_root = pathlib.Path(args.output_root).expanduser().absolute()
@@ -50,6 +52,7 @@ def main():
             similarity=get_similarity_by_name(name=args.similarity) if args.similarity is not None else None,
             cluster_ratio=args.cluster_ratio,
             cluster_representative=args.cluster_representative,
+            softmax=args.softmax,
         )
         result_df = evaluate_ranking_method(method=method, k=args.k)
     for key, value in config.items():

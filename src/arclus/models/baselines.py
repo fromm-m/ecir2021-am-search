@@ -8,7 +8,7 @@ from typing import Any, Mapping, Sequence, Tuple
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES, PREP_TEST_SIMILARITIES_SOFTMAX
 from arclus.similarity import Similarity
 from arclus.utils import get_subclass_by_name
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
@@ -194,16 +194,22 @@ class LearnedSimilarityKNN(RankingMethod):
 
     def __init__(
         self,
+        softmax: bool = True,
         model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
         cache_root: str = '/tmp/arclus/bert',
     ):
         """
         Initialize the method.
 
+        :param softmax:
+            Whether to apply softmax on the scores for the pairwise similarity model.
         :param model_path:
             Directory where the fine-tuned bert similarity model checkpoint is located.
+        :param cache_root:
+            The directory where temporary BERT inference files are stored.
         """
-        if not PREP_TEST_SIMILARITIES.is_file():
+        buffer_path = PREP_TEST_SIMILARITIES_SOFTMAX if softmax else PREP_TEST_SIMILARITIES
+        if not buffer_path.is_file():
             logger.info('computing similarities')
             # load bert model and the data
             batch_size = 128
@@ -222,15 +228,22 @@ class LearnedSimilarityKNN(RankingMethod):
             # generate logits for all claims-premise pairs
             # predictions = inference(args, data, loader, logger, model)
             logger.info('Run inference')
-            predictions = inference_no_args(data=data, loader=loader, logger=logger, model=model, batch_size=batch_size)
+            predictions = inference_no_args(
+                data=data,
+                loader=loader,
+                logger=logger,
+                model=model,
+                batch_size=batch_size,
+                softmax=softmax,
+            )
 
             # TODO: How to map guids to claim_id, premise_id?
             # Are premise_ids unique?=
             # d = dict(zip(guids, predictions))
             precomputed_similarities = dict(zip(guids, predictions))
-            torch.save(precomputed_similarities, PREP_TEST_SIMILARITIES)
+            torch.save(precomputed_similarities, buffer_path)
 
-        self.precomputed_similarities = torch.load(PREP_TEST_SIMILARITIES)
+        self.precomputed_similarities = torch.load(buffer_path)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # def lookup_similarity(premise_id: str) -> float:
@@ -250,14 +263,33 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         self,
         cluster_ratio: float = 0.5,
         premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
+        softmax: bool = True,
         model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
         cache_root: str = '/tmp/arclus/bert',
     ):
-        super().__init__(model_path=model_path, cache_root=cache_root)
+        """
+        Initialize the method.
+
+        :param cluster_ratio:
+            The reduction ratio. n_clusters is chosen according to
+
+             .. math ::
+                n_clusters = min(max(int(round(ratio * num_premises)), k), num_premises)
+
+        :param premises_path:
+            The path where the precomputed premise representations are stored.
+        :param softmax:
+            Whether to apply softmax on the scores for the pairwise similarity model.
+        :param model_path:
+            Directory where the fine-tuned bert similarity model checkpoint is located.
+        :param cache_root:
+            The directory where temporary BERT inference files are stored.
+        """
+        super().__init__(model_path=model_path, cache_root=cache_root, softmax=softmax)
         self.ratio = cluster_ratio
         self.premises = torch.load(premises_path)
 
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get premise representations
         num_premises = len(premise_ids)
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
