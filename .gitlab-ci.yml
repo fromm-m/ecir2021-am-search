@@ -52,7 +52,7 @@ pylint-other:
   stage: static-code-checking
   script:
     - cd src
-    - PYTHONPATH=. pylint --disable=all --enable=W arclus
+    - PYTHONPATH=. pylint --disable=all --enable=W --disable=no-absolute-import,old-division arclus
   allow_failure: true
   interruptible: true
 
