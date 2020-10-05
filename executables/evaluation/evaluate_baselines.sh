@@ -45,4 +45,4 @@ for softmax in True False; do
 done
 
 end_time=$(date)
-echo "[DONE] ${start_time} (started ${end_time})"
+echo "[DONE] ${end_time} (started ${start_time})"
