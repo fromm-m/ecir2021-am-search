@@ -54,6 +54,7 @@ def load_bert_model_and_data(args):
         overwrite_cache=args.overwrite_cache,
         max_seq_length=args.max_seq_length,
         model_type=args.model_type,
+        cache_root=args.cache_root,
     )
 
 
