@@ -77,11 +77,14 @@ def optimal_mdcg_score(
     :return:
         The optimal value of mDCG@k.
     """
-    a = data[
-        (data["relevance"] > 0) & ~(data["premiseClusterID_groundTruth"].isna())
-        ].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False).astype(float)
+    # filter irrelevant
+    data = data[(data["relevance"] > 0) & ~(data["premiseClusterID_groundTruth"].isna())]
+    # get most relevant from each cluster
+    data = data.groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max'))
+    # sort by relevance
+    data = data.sort_values(by='relevance', ascending=False).astype(float)
     gain = 0.
-    for i, r in zip(range(k), a.values.flat):
+    for i, r in zip(range(k), data.values.flat):
         gain += r / math.log2(i + 2)
     return gain
 
