@@ -258,6 +258,17 @@ def evaluate_ranking_method(
     method: RankingMethod,
     k: Union[int, Collection[int]],
 ) -> pandas.DataFrame:
+    """
+    Evaluate a ranking method with mnDCG@k.
+
+    :param method:
+        The ranking method.
+    :param k: > 0
+        (Potentially multiple) cut-off parameter(s).
+
+    :return:
+        A dataframe with columns ["claim_id", "k", "mnDCG"].
+    """
     # Input normalization
     if isinstance(k, int):
         k = [k]
@@ -286,6 +297,19 @@ def evaluate_ranking_method_related_work(
     k: Union[int, Collection[int]],
     column: str,
 ) -> pandas.DataFrame:
+    """
+    Evaluate a ranking method with mnDCG@k, whose results are already contained in the dataframe.
+
+    :param method:
+        The ranking method. Must be in {"first512Tokens", "slidingWindow", "sentences"}.
+    :param k: > 0
+        (Potentially multiple) cut-off parameter(s).
+    :param column:
+        The column prefix for the score column. The final column is composed as "{column}_{method}".
+
+    :return:
+        A dataframe with columns ["claim_id", "k", "mnDCG"].
+    """
     # Input normalization
     if isinstance(k, int):
         k = [k]
