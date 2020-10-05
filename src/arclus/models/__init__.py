@@ -1,7 +1,8 @@
+"""Ranking methods."""
+# pylint: disable=unused-imports
 import inspect
 from typing import Any
 
-from . import RankingMethod
 from .base import RankingMethod
 from .baselines import LearnedSimilarityClusterKNN, LearnedSimilarityKNN, ZeroShotClusterKNN, ZeroShotKNN
 from .dumani import Dumani
