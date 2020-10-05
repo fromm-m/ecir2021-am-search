@@ -24,6 +24,8 @@ def main():
         ignore_index=True,
     ).fillna('')
     df['softmax'] = df['softmax'].apply(lambda x: True if x == 1.0 else (False if x == 0.0 else ''))
+    mask = df['method'] == 'dumani'
+    df.loc[mask, 'similarity'] = df.loc[mask, 'column']
     summary = df.groupby(
         by=[
             'method',
