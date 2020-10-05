@@ -16,6 +16,7 @@ class MNDCGTests(unittest.TestCase):
     num_clusters: int = 7
 
     def setUp(self) -> None:
+        """Initialize test data."""
         # random data
         self.data = pandas.DataFrame(data=dict(
             premise_id=generate_random_words(num_words=self.num_premises),
