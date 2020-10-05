@@ -57,7 +57,6 @@ class MNDCGTests(unittest.TestCase):
             )
         )
         # optimal ranking: (c, 2), (b, 2), (a, 1)
-        # expected_score
         expected_score = (numpy.asarray([2, 2, 1], dtype=float) / numpy.log2(2 + numpy.arange(3))).sum()
         optimal_score = optimal_mdcg_score(
             data=test_data,
