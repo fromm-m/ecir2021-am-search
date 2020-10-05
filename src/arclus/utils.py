@@ -1,6 +1,7 @@
 """Utility methods."""
 import random
-from typing import Callable, Collection, Optional, Set, Type, TypeVar, Union
+import string
+from typing import Callable, Collection, List, Optional, Set, Type, TypeVar, Union
 
 import numpy as np
 import pandas
@@ -166,3 +167,11 @@ def get_subclass_by_name(
             return subclass
     subclass_dict = {normalizer(c.__name__): c for c in get_all_subclasses(base_class=base_class)}
     raise ValueError(f'{base_class} does not have a subclass named {norm_name}. Subclasses: {subclass_dict}.')
+
+
+def generate_random_words(num_words, max_word_length: int = 10) -> List[str]:
+    """Generate a list of random words."""
+    return [
+        "".join(random.choices(string.ascii_letters, k=random.randrange(1, max_word_length)))
+        for _ in range(num_words)
+    ]

@@ -1,27 +1,17 @@
 """Tests for utility methods."""
 import itertools
 import random
-import string
-from typing import List
 
 import pandas
 
-from arclus.utils import concat_premise_claims, truncate
-
-
-def _generate_random_words(num_words, max_word_length: int = 10) -> List[str]:
-    """Generate a list of random words."""
-    return [
-        "".join(random.choices(string.ascii_letters, k=random.randrange(1, max_word_length)))
-        for _ in range(num_words)
-    ]
+from arclus.utils import concat_premise_claims, generate_random_words, truncate
 
 
 def test_truncate():
     """Test truncate()."""
     for limit, n_words in itertools.product(range(10, 30, 5), range(10, 100, 10)):
         # generate list of random words
-        words = _generate_random_words(num_words=n_words)
+        words = generate_random_words(num_words=n_words)
 
         # join to text
         text = " ".join(words)
@@ -39,7 +29,7 @@ def test_concat_premise_claims():
     num_premises = 7
     max_premise_words = 3
     premise_texts = [
-        " ".join(_generate_random_words(num_words=max_premise_words + random.randrange(1, max_premise_words)))
+        " ".join(generate_random_words(num_words=max_premise_words + random.randrange(1, max_premise_words)))
         for _ in range(num_premises)
     ]
     premises_df = pandas.DataFrame(
@@ -53,7 +43,7 @@ def test_concat_premise_claims():
     num_claims = 3
     max_claim_words = 2
     claim_texts = [
-        " ".join(_generate_random_words(num_words=max_claim_words + random.randrange(1, max_claim_words)))
+        " ".join(generate_random_words(num_words=max_claim_words + random.randrange(1, max_claim_words)))
         for _ in range(num_claims)
     ]
     claims_df = pandas.DataFrame(
