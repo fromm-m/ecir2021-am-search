@@ -45,19 +45,6 @@ def load_bert_model_and_data_no_args(
     return DataLoader(data, sampler=sampler, batch_size=batch_size), data, bert_model, guids
 
 
-def load_bert_model_and_data(args):
-    return load_bert_model_and_data_no_args(
-        model_path=args.model_path,
-        task_name=args.task_name,
-        batch_size=args.batch_size,
-        data_dir=args.data_dir,
-        overwrite_cache=args.overwrite_cache,
-        max_seq_length=args.max_seq_length,
-        model_type=args.model_type,
-        cache_root=args.cache_root,
-    )
-
-
 @torch.no_grad()
 def inference_no_args(
     data: TensorDataset,
