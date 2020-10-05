@@ -57,6 +57,7 @@ def mdcg_score(
         else:
             # only premises with relevance are assigned to clusters
             assert math.isnan(cluster_id)
+            relevance = 0
         gain += relevance / math.log2(i + 2)
     return gain
 
@@ -76,7 +77,9 @@ def optimal_mdcg_score(
     :return:
         The optimal value of mDCG@k.
     """
-    a = data[data["relevance"] > 0].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False).astype(float)
+    a = data[
+        (data["relevance"] > 0) & ~(data["premiseClusterID_groundTruth"].isna())
+        ].groupby(by='premiseClusterID_groundTruth').agg(dict(relevance='max')).sort_values(by='relevance', ascending=False).astype(float)
     gain = 0.
     for i, r in zip(range(k), a.values.flat):
         gain += r / math.log2(i + 2)
