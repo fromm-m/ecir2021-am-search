@@ -1,9 +1,8 @@
-import inspect
 import logging
 import pathlib
 from abc import ABC
 from logging import Logger
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Mapping, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
@@ -11,9 +10,7 @@ from sklearn.cluster import KMeans
 from arclus.models.base import RankingMethod
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES, PREP_TEST_SIMILARITIES_SOFTMAX
 from arclus.similarity import Similarity
-from arclus.utils import get_subclass_by_name
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
-from .dumani import Dumani
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -288,22 +285,3 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
                 result.append(premise_id)
             seen_clusters.add(cluster_id)
         return result[:k]
-
-
-def name_normalizer(name: str) -> str:
-    return name.lower().replace('_', '')
-
-
-def get_baseline_method_by_name(
-    name: str,
-    **kwargs: Any,
-) -> RankingMethod:
-    cls = get_subclass_by_name(base_class=RankingMethod, name=name, normalizer=name_normalizer)
-    real_kwargs = dict()
-    for key, value in kwargs.items():
-        signature = inspect.signature(cls.__init__)
-        if key in signature.parameters:
-            real_kwargs[key] = value
-        else:
-            print(f"Unused argument {key}={value}")
-    return cls(**real_kwargs)
