@@ -4,7 +4,7 @@ import logging
 import pathlib
 from hashlib import sha512
 
-from arclus.evaluation import evaluate_ranking_method, evaluate_ranking_method_related_work
+from arclus.evaluation import evaluate_ranking_method
 from arclus.models.baselines import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
 from arclus.utils import argparse_bool
@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--softmax', default=None, type=argparse_bool)
     parser.add_argument('--cluster_ratio', default=None, type=float)
     parser.add_argument('--cluster_representative', default=None, type=str, choices=['closest-to-center', 'closest-to-claim'])
+    parser.add_argument('--column', default=None, type=str, choices=["first512Tokens", "slidingWindow", "sentences"])
     parser.add_argument('--force', action='store_true', default=False)
     args = parser.parse_args()
     config = dict(
@@ -28,6 +29,7 @@ def main():
         cluster_ratio=args.cluster_ratio,
         cluster_representative=args.cluster_representative,
         softmax=args.softmax,
+        column=args.column,
     )
 
     output_root = pathlib.Path(args.output_root).expanduser().absolute()
@@ -40,22 +42,15 @@ def main():
         quit(0)
 
     # Instantiate method
-    if args.method.startswith('dumani'):
-        # related work
-        result_df = evaluate_ranking_method_related_work(
-            method=args.method[len('dumani_'):],
-            k=args.k,
-            column=args.similarity,
-        )
-    else:
-        method = get_baseline_method_by_name(
-            name=args.method,
-            similarity=get_similarity_by_name(name=args.similarity) if args.similarity is not None else None,
-            cluster_ratio=args.cluster_ratio,
-            cluster_representative=args.cluster_representative,
-            softmax=args.softmax,
-        )
-        result_df = evaluate_ranking_method(method=method, k=args.k)
+    method = get_baseline_method_by_name(
+        name=args.method,
+        similarity=get_similarity_by_name(name=args.similarity) if args.similarity is not None else None,
+        cluster_ratio=args.cluster_ratio,
+        cluster_representative=args.cluster_representative,
+        softmax=args.softmax,
+        column=args.column,
+    )
+    result_df = evaluate_ranking_method(method=method, k=args.k)
     for key, value in config.items():
         result_df[key] = value
     result_df.to_csv(output_path, index=False, sep='\t')
