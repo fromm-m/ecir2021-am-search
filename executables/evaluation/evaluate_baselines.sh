@@ -4,9 +4,11 @@ time=$(date)
 echo "[START] ${time}"
 
 # 0. Dumani et al.
-python3 evaluate_baseline.py --method dumani_first512Tokens >/dev/null
-python3 evaluate_baseline.py --method dumani_slidingWindow >/dev/null
-python3 evaluate_baseline.py --method dumani_sentences >/dev/null
+for method in first512Tokens slidingWindow sentences; do
+  for column in 'P(\pi_j|q)' 'P(p|q)'; do
+    python3 evaluate_baseline.py --method dumani_$method --similarity=$column >/dev/null
+  done
+done
 
 # 1. Baseline
 method=zero_shot_knn

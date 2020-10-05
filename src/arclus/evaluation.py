@@ -247,6 +247,7 @@ def evaluate_ranking_method(
 def evaluate_ranking_method_related_work(
     method: str,
     k: Union[int, Collection[int]],
+    column: str,
 ) -> pandas.DataFrame:
     # Input normalization
     if isinstance(k, int):
@@ -255,7 +256,7 @@ def evaluate_ranking_method_related_work(
     df = load_assignments_with_numeric_relevance()
     assert method in {'sentences', 'slidingWindow', 'first512Tokens'}
     # keep only relevant columns
-    method_col = f"P(\pi_j|q)_{method}"
+    method_col = f"{column}_{method}"
     cluster_col = f"premiseClusterID_{method}"
     df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth", method_col, cluster_col]]
     # iterate over all claims

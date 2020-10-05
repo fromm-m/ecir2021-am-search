@@ -24,7 +24,7 @@ def main():
         method=args.method,
         similarity=args.similarity,
         cluster_ratio=args.cluster_ratio,
-        cluster_representative=args.cluster_representative
+        cluster_representative=args.cluster_representative,
     )
 
     output_root = pathlib.Path(args.output_root).expanduser().absolute()
@@ -41,7 +41,8 @@ def main():
         # related work
         result_df = evaluate_ranking_method_related_work(
             method=args.method[len('dumani_'):],
-            k=args.k
+            k=args.k,
+            column=args.similarity,
         )
     else:
         method = get_baseline_method_by_name(
