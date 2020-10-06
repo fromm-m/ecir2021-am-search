@@ -2,7 +2,7 @@ import logging
 import pathlib
 from abc import ABC
 from logging import Logger
-from typing import Mapping, Sequence, Tuple
+from typing import Mapping, Optional, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
@@ -62,7 +62,9 @@ class ZeroShotKNN(ZeroShotRanking):
         return [premise_ids[i] for i in top_ids.tolist()]
 
 
-def _num_clusters(ratio: float, num_premises: int, k: int) -> int:
+def _num_clusters(ratio: Optional[float], num_premises: int, k: int) -> int:
+    if ratio is None:
+        return k
     n_clusters = int(round(ratio * num_premises))
     n_clusters = max(n_clusters, k)
     n_clusters = min(n_clusters, num_premises)
@@ -75,7 +77,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
     def __init__(
         self,
         similarity: Similarity,
-        cluster_ratio: float = 0.5,
+        cluster_ratio: Optional[float] = 0.5,
         claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
         premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
         cluster_representative: str = 'closest-to-center',
@@ -86,7 +88,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         :param similarity:
             The similarity to use for the representations.
         :param cluster_ratio: >0
-            The relative number of clusters to use.
+            The relative number of clusters to use. If None, use k.
         :param claims_path:
             The path to the pre-computed claims representations.
         :param premises_path:
@@ -228,7 +230,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
 
     def __init__(
         self,
-        cluster_ratio: float = 0.5,
+        cluster_ratio: Optional[float] = 0.5,
         premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
         softmax: bool = True,
         model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
@@ -237,12 +239,8 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         """
         Initialize the method.
 
-        :param cluster_ratio:
-            The reduction ratio. n_clusters is chosen according to
-
-             .. math ::
-                n_clusters = min(max(int(round(ratio * num_premises)), k), num_premises)
-
+        :param cluster_ratio: >0
+            The relative number of clusters to use. If None, use k.
         :param premises_path:
             The path where the precomputed premise representations are stored.
         :param softmax:
