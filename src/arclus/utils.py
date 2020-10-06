@@ -5,7 +5,6 @@ from typing import Callable, Collection, List, Optional, Set, Type, TypeVar, Uni
 
 import numpy as np
 import pandas
-import pandas as pd
 import torch
 
 from arclus.settings import PREP_ASSIGNMENTS_TEST
@@ -110,7 +109,7 @@ def format_numbers(numbers_string):
 def load_assignments_with_numeric_relevance(csv_path: str = PREP_ASSIGNMENTS_TEST) -> pandas.DataFrame:
     """Load the dataframe with all informations."""
     # read data
-    df = pd.read_csv(csv_path, sep=";", thousands='.')
+    df = pandas.read_csv(csv_path, sep=";", thousands='.')
 
     # set the relevance to the according value (cf. paper)
     translation = {
