@@ -5,7 +5,6 @@ from typing import Callable, Collection, List, Optional, Set, Type, TypeVar, Uni
 
 import numpy as np
 import pandas
-import pandas as pd
 import torch
 
 from arclus.settings import PREP_ASSIGNMENTS_TEST
@@ -107,18 +106,20 @@ def format_numbers(numbers_string):
     return float(numbers_string.replace('.', ',', 1).replace('.', '').replace(',', '.'))
 
 
-def load_assignments_with_numeric_relevance(column: str = None):
+def load_assignments_with_numeric_relevance(csv_path: str = PREP_ASSIGNMENTS_TEST) -> pandas.DataFrame:
+    """Load the dataframe with all informations."""
+    # read data
+    df = pandas.read_csv(csv_path, sep=";", thousands='.')
+
     # set the relevance to the according value (cf. paper)
-    df_assignments = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
     translation = {
         "notRelevant": 0,
         "yesRelevant": 1,
         "yesVeryRelevant": 2,
     }
-    df_assignments["relevance"] = df_assignments["relevance"].apply(translation.__getitem__)
-    if column is not None:
-        df_assignments[column] = df_assignments[column].apply(format_numbers)
-    return df_assignments
+    df["relevance"] = df["relevance"].map(translation.__getitem__)
+
+    return df
 
 
 T = TypeVar('T')
