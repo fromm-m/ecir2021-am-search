@@ -264,15 +264,15 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         cluster_assignment = algorithm.fit_predict(premise_repr.numpy())
 
         # TODO: Why don't we need the claim_id?
-        def lookup_similarity(i: int) -> float:
-            return self.precomputed_similarities[premise_ids[i]]
+        def lookup_similarity(premise_id: str, claim_id: int) -> float:
+            return self.precomputed_similarities[(premise_id, claim_id)]
 
         seen_clusters = set()
         result = []
-        for i in sorted(range(num_premises), key=lookup_similarity, reverse=True):
-            cluster_id = int(cluster_assignment[i])
+        mapping = dict(zip(premise_ids, cluster_assignment))
+        for premise_id in sorted(premise_ids, key=lambda premise_id: lookup_similarity(premise_id=premise_id, claim_id=claim_id), reverse=True):
+            cluster_id = mapping[premise_id]
             if cluster_id not in seen_clusters:
-                premise_id = premise_ids[i]
                 result.append(premise_id)
             seen_clusters.add(cluster_id)
         return result[:k]
