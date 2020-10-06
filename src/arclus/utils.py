@@ -50,11 +50,11 @@ def truncate(x: str, limit: int) -> str:
 
 
 def concat_premise_claims(
-        premises_df: pandas.DataFrame,
-        claims_df: pandas.DataFrame,
-        assignment_df: pandas.DataFrame,
-        max_premise_words: int,
-        max_claim_words: int,
+    premises_df: pandas.DataFrame,
+    claims_df: pandas.DataFrame,
+    assignment_df: pandas.DataFrame,
+    max_premise_words: int,
+    max_claim_words: int,
 ) -> pandas.Series:
     """
     Concatenate the texts of premise-claim pairs which are assigned.
@@ -106,11 +106,20 @@ def format_numbers(numbers_string):
 
 
 def load_assignments_with_numeric_relevance(column: str = None):
+    # read data
+    df = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
+
     # set the relevance to the according value (cf. paper)
-    df_assignments = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "notRelevant")] = 0
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesRelevant")] = 1
-    df_assignments['relevance'].loc[(df_assignments['relevance'] == "yesVeryRelevant")] = 2
-    if column is not None:
-        df_assignments[column] = df_assignments[column].apply(format_numbers)
-    return df_assignments
+    translation = {
+        "notRelevant": 0,
+        "yesRelevant": 1,
+        "yesVeryRelevant": 2,
+    }
+    df["relevance"] = df["relevance"].map(translation.__getitem__)
+
+    # format numbers
+    for column in df.columns:
+        if column.startswith('P('):
+            df[column] = df[column].apply(format_numbers)
+
+    return df
