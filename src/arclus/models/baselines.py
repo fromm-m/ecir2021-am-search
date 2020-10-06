@@ -210,24 +210,17 @@ class LearnedSimilarityKNN(RankingMethod):
                 batch_size=batch_size,
                 softmax=softmax,
             )
-
-            # TODO: How to map guids to claim_id, premise_id?
-            # Are premise_ids unique?=
-            # d = dict(zip(guids, predictions))
             precomputed_similarities = dict(zip(guids, predictions))
             torch.save(precomputed_similarities, buffer_path)
 
         self.precomputed_similarities = torch.load(buffer_path)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        # def lookup_similarity(premise_id: str) -> float:
-        #     return self.precomputed_similarities[claim_id, premise_id]
+        def lookup_similarity(premise_id: str, claim_id: int) -> float:
+            return self.precomputed_similarities[(premise_id, claim_id)]
 
-        # TODO: Why don't we need the claim_id?
-        def lookup_similarity(premise_id: str) -> float:
-            return self.precomputed_similarities[premise_id]
-
-        return sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
+        return sorted(premise_ids, key=lambda premise_id: lookup_similarity(premise_id=premise_id, claim_id=claim_id),
+                      reverse=True)[:k]
 
 
 class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):

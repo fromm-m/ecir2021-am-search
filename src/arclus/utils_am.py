@@ -249,7 +249,6 @@ def convert_examples_to_features(
 
         if ex_index < 5:
             logger.info("*** Example ***")
-            logger.info("guid: %s" % example.guid)
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info(
                 "attention_mask: %s" % " ".join([str(x) for x in attention_mask])
@@ -290,7 +289,7 @@ class SimilarityProcessor(DataProcessor):
         """Creates examples for the training and test sets."""
         examples = []
         for index, row in df.iterrows():
-            guid = row["premise_id"]
+            guid = row["premise_id"], row["claim_id"]
             text_a = row["premise_text"]
             text_b = row["claim_text"]
 
