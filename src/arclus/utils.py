@@ -107,9 +107,10 @@ def format_numbers(numbers_string):
     return float(numbers_string.replace('.', ',', 1).replace('.', '').replace(',', '.'))
 
 
-def load_assignments_with_numeric_relevance(column: str = None):
+def load_assignments_with_numeric_relevance(csv_path: str = PREP_ASSIGNMENTS_TEST) -> pandas.DataFrame:
+    """Load the dataframe with all informations."""
     # read data
-    df = pd.read_csv(PREP_ASSIGNMENTS_TEST, sep=";")
+    df = pd.read_csv(csv_path, sep=";", thousands='.')
 
     # set the relevance to the according value (cf. paper)
     translation = {
@@ -118,11 +119,6 @@ def load_assignments_with_numeric_relevance(column: str = None):
         "yesVeryRelevant": 2,
     }
     df["relevance"] = df["relevance"].map(translation.__getitem__)
-
-    # format numbers
-    for column in df.columns:
-        if column.startswith('P('):
-            df[column] = df[column].apply(format_numbers)
 
     return df
 
