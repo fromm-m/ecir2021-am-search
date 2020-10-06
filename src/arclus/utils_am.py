@@ -27,6 +27,7 @@ def load_bert_model_and_data_no_args(
     max_seq_length: int,
     model_type: str,
     cache_root: str,
+    product: bool,
 ) -> Tuple[DataLoader, TensorDataset, BertForSequenceClassification, List[Any]]:
     tokenizer = BertTokenizer.from_pretrained(model_path)
     bert_model = BertForSequenceClassification.from_pretrained(model_path)
@@ -39,6 +40,7 @@ def load_bert_model_and_data_no_args(
         max_seq_length=max_seq_length,
         model_type=model_type,
         cache_root=cache_root,
+        product=product
     )
     sampler = SequentialSampler(data)
     guids = [o.guid for o in examples]
@@ -104,6 +106,7 @@ def load_and_cache_examples(
     max_seq_length: int,
     model_type: str,
     cache_root: str = "../../data/preprocessed",
+    product: bool = False
 ):
     processor = processors[task]()
     output_mode = output_modes[task]
@@ -121,7 +124,7 @@ def load_and_cache_examples(
     else:
         logger.info("Creating features from dataset file at %s", data_dir)
         label_list = processor.get_labels()
-        examples = processor.get_examples(data_dir=data_dir)
+        examples = processor.get_examples(data_dir=data_dir, product=product)
         log_param("  Num examples training", len(examples))
 
         features = convert_examples_to_features(
@@ -272,9 +275,12 @@ def convert_examples_to_features(
 class SimilarityProcessor(DataProcessor):
     """Processor for the AM data set."""
 
-    def get_examples(self, data_dir: str):
+    def get_examples(self, data_dir: str, product: bool):
         df = self.read_tsv(data_dir)
-        return self._create_examples(df)
+        if product:
+            return self._create_product_examples(df)
+        else:
+            return self._create_examples(df)
 
     def get_labels(self):
         """Gets the list of labels for this data set."""
@@ -302,6 +308,28 @@ class SimilarityProcessor(DataProcessor):
             )
         return examples
 
+    @staticmethod
+    def _create_product_examples(df):
+        """Creates examples for the training and test sets."""
+        examples = []
+        claim_ids = df.claim_id.to_numpy(dtype=int)
+        claim_text = df.claim_text.to_numpy(dtype=str)
+        claim_mapping = dict(zip(claim_ids, claim_text))
+        premise_ids = df.premise_id.to_numpy(dtype=str)
+        premise_text = df.premise_text.to_numpy(dtype=str)
+        premise_mapping = dict(zip(premise_ids, premise_text))
+
+        for claim_id in claim_mapping:
+            for premise_id in premise_mapping:
+                guid = premise_id, claim_id
+                text_a = premise_mapping[premise_id]
+                text_b = claim_mapping[claim_id]
+                if type(text_a) is not str:
+                    text_a = ""
+                if type(text_b) is not str:
+                    text_b = ""
+                examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b))
+        return examples
 
 def simple_accuracy(preds, labels):
     return (preds == labels).mean()

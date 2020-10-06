@@ -8,7 +8,8 @@ import torch
 from sklearn.cluster import KMeans
 
 from arclus.models.base import RankingMethod
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES, PREP_TEST_SIMILARITIES_SOFTMAX
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES, \
+    PREP_TEST_SIMILARITIES_SOFTMAX, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX
 from arclus.similarity import Similarity
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -199,6 +200,7 @@ class LearnedSimilarityKNN(RankingMethod):
                 max_seq_length=512,
                 model_type="bert",
                 cache_root=cache_root,
+                product=False
             )
 
             # generate logits for all claims-premise pairs
@@ -274,3 +276,88 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
                 result.append(premise_id)
             seen_clusters.add(cluster_id)
         return result[:k]
+
+
+class LearnedSimilarityMatrixClusterKNN(RankingMethod):
+    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
+
+    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
+
+    #: The precomputed similarities.
+    precomputed_similarities: Mapping[Tuple[str, int], float]
+
+    def __init__(
+            self,
+            cluster_ratio: Optional[float] = 0.5,
+            softmax: bool = True,
+            model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+            cache_root: str = '/tmp/arclus/bert',
+    ):
+        """
+        Initialize the method.
+
+        :param softmax:
+            Whether to apply softmax on the scores for the pairwise similarity model.
+        :param model_path:
+            Directory where the fine-tuned bert similarity model checkpoint is located.
+        :param cache_root:
+            The directory where temporary BERT inference files are stored.
+        """
+        buffer_path = PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX if softmax else PREP_TEST_PRODUCT_SIMILARITIES
+        logger.info(f'Using softmax: {softmax}')
+        if not buffer_path.is_file():
+            logger.info('computing similarities')
+            # load bert model and the data
+            batch_size = 128
+            logger.info('Load data')
+            loader, data, model, guids = load_bert_model_and_data_no_args(
+                model_path=model_path,
+                task_name="SIM",
+                batch_size=batch_size,
+                data_dir=PREP_ASSIGNMENTS_TEST,
+                overwrite_cache=True,
+                max_seq_length=512,
+                model_type="bert",
+                cache_root=cache_root,
+                product=True
+            )
+
+            # generate logits for all claims-premise pairs
+            # predictions = inference(args, data, loader, logger, model)
+            logger.info('Run inference')
+            predictions = inference_no_args(
+                data=data,
+                loader=loader,
+                logger=logger,
+                model=model,
+                batch_size=batch_size,
+                softmax=softmax,
+            )
+            precomputed_similarities = dict(zip(guids, predictions))
+            torch.save(precomputed_similarities, buffer_path)
+
+        self.precomputed_similarities = torch.load(buffer_path)
+        self.ratio = cluster_ratio
+
+
+def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+    # get premise representations
+    num_premises = len(premise_ids)
+    premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+
+    # cluster premises
+    algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
+    cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
+
+    def lookup_similarity(premise_id: str) -> float:
+        return self.precomputed_similarities[premise_id, claim_id]
+
+    seen_clusters = set()
+    result = []
+    mapping = dict(zip(premise_ids, cluster_assignment))
+    for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
+        cluster_id = mapping[premise_id]
+        if cluster_id not in seen_clusters:
+            result.append(premise_id)
+        seen_clusters.add(cluster_id)
+    return result[:k]
