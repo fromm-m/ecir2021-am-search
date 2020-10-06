@@ -86,3 +86,17 @@ def get_most_similar(
     sim_values, indices = similarity.sim(claims=claims, premises=premises).topk(k=k, largest=True, sorted=True)
 
     return premises[indices], indices
+
+
+_SIMILARITIES = dict(
+    l2=LpSimilarity(p=2),
+    l1=LpSimilarity(p=1),
+    cos=CosineSimilarity(),
+)
+
+
+def get_similarity_by_name(
+    name: str,
+) -> Similarity:
+    """Instantiate similarity."""
+    return _SIMILARITIES[name.lower()]

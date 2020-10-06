@@ -1,5 +1,7 @@
 """Utility methods."""
 import random
+import string
+from typing import Callable, Collection, List, Optional, Set, Type, TypeVar, Union
 
 import numpy as np
 import pandas
@@ -123,3 +125,64 @@ def load_assignments_with_numeric_relevance(column: str = None):
             df[column] = df[column].apply(format_numbers)
 
     return df
+
+
+T = TypeVar('T')
+
+
+def get_all_subclasses(base_class: Type[T]) -> Set[Type[T]]:
+    """Get a collection of all (recursive) subclasses of a given base class."""
+    return set(base_class.__subclasses__()).union(s for c in base_class.__subclasses__() for s in get_all_subclasses(c))
+
+
+def identity(x: T) -> T:
+    return x
+
+
+def get_subclass_by_name(
+    base_class: Type[T],
+    name: str,
+    normalizer: Optional[Callable[[str], str]] = None,
+    exclude: Optional[Union[Collection[Type[T]], Type[T]]] = None,
+) -> Type[T]:
+    """Get a subclass of a base-class by name.
+
+    :param base_class:
+        The base class.
+    :param name:
+        The name.
+    :param normalizer:
+        An optional name normalizer, e.g. str.lower
+    :param exclude:
+        An optional collection of subclasses to exclude.
+
+    :return:
+        The subclass with matching name.
+    :raises ValueError:
+        If no such subclass can be determined.
+    """
+    if normalizer is None:
+        normalizer = identity
+    if exclude is None:
+        exclude = set()
+    if isinstance(exclude, type):
+        exclude = {exclude}
+    norm_name = normalizer(name)
+    for subclass in get_all_subclasses(base_class=base_class).difference(exclude):
+        if normalizer(subclass.__name__) == norm_name:
+            return subclass
+    subclass_dict = {normalizer(c.__name__): c for c in get_all_subclasses(base_class=base_class)}
+    raise ValueError(f'{base_class} does not have a subclass named {norm_name}. Subclasses: {subclass_dict}.')
+
+
+def generate_random_words(num_words, max_word_length: int = 10) -> List[str]:
+    """Generate a list of random words."""
+    return [
+        "".join(random.choices(string.ascii_letters, k=random.randrange(1, max_word_length)))
+        for _ in range(num_words)
+    ]
+
+
+def argparse_bool(x):
+    """Convert a command line arguments for a boolean value."""
+    return str(x).lower() in {'true', '1', 'yes'}
