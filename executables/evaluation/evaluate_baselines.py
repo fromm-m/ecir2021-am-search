@@ -77,11 +77,12 @@ def main():
             continue
 
         # Instantiate similarity if necessary
+        real_config = config.copy()
         if 'similarity' in config.keys():
-            config['similarity'] = get_similarity_by_name(name=config['similarity'])
+            real_config['similarity'] = get_similarity_by_name(name=config['similarity'])
 
         # Instantiate method
-        method = get_baseline_method_by_name(**config)
+        method = get_baseline_method_by_name(**real_config)
 
         # Evaluate method
         result_df = evaluate_ranking_method(method=method, k=args.k)
@@ -109,11 +110,11 @@ def main():
         ignore_index=True,
     ).fillna('')
     df['softmax'] = df['softmax'].apply(lambda x: True if x == 1.0 else (False if x == 0.0 else ''))
-    mask = df['method'] == 'dumani'
+    mask = df['name'] == 'dumani'
     df.loc[mask, 'similarity'] = df.loc[mask, 'column']
     summary = df.groupby(
         by=[
-            'method',
+            'name',
             'similarity',
             'cluster_ratio',
             'cluster_representative',
