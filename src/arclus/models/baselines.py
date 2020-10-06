@@ -260,7 +260,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
 
         # cluster premises
         algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
-        cluster_assignment = algorithm.fit_predict(premise_repr.numpy())
+        cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
 
         def lookup_similarity(premise_id: str) -> float:
             return self.precomputed_similarities[premise_id, claim_id]
