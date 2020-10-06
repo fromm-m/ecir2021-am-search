@@ -165,7 +165,7 @@ class LearnedSimilarityKNN(RankingMethod):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
 
     #: The precomputed similarities.
-    precomputed_similarities: Mapping[Tuple[int, str], float]
+    precomputed_similarities: Mapping[Tuple[str, int], float]
 
     def __init__(
         self,
@@ -218,11 +218,10 @@ class LearnedSimilarityKNN(RankingMethod):
         self.precomputed_similarities = torch.load(buffer_path)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        def lookup_similarity(premise_id: str, claim_id: int) -> float:
-            return self.precomputed_similarities[(premise_id, claim_id)]
+        def lookup_similarity(premise_id: str) -> float:
+            return self.precomputed_similarities[premise_id, claim_id]
 
-        return sorted(premise_ids, key=lambda premise_id: lookup_similarity(premise_id=premise_id, claim_id=claim_id),
-                      reverse=True)[:k]
+        return sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
 
 
 class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
@@ -263,14 +262,13 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
         cluster_assignment = algorithm.fit_predict(premise_repr.numpy())
 
-        # TODO: Why don't we need the claim_id?
-        def lookup_similarity(premise_id: str, claim_id: int) -> float:
-            return self.precomputed_similarities[(premise_id, claim_id)]
+        def lookup_similarity(premise_id: str) -> float:
+            return self.precomputed_similarities[premise_id, claim_id]
 
         seen_clusters = set()
         result = []
         mapping = dict(zip(premise_ids, cluster_assignment))
-        for premise_id in sorted(premise_ids, key=lambda premise_id: lookup_similarity(premise_id=premise_id, claim_id=claim_id), reverse=True):
+        for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
             cluster_id = mapping[premise_id]
             if cluster_id not in seen_clusters:
                 result.append(premise_id)
