@@ -338,6 +338,7 @@ class SimilarityProcessor(DataProcessor):
                 examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b))
         return examples
 
+
 def simple_accuracy(preds, labels):
     return (preds == labels).mean()
 
