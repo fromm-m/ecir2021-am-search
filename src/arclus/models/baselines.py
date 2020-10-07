@@ -401,7 +401,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         premise_repr = torch.stack([
             self.premise_representations[premise_id]
             for premise_id in premise_ids
-        ], dim=0)
+        ], dim=0).view(len(premise_ids), -1)
 
         return _premise_cluster_filtered(
             claim_id=claim_id,
