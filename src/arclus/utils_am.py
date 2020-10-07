@@ -55,6 +55,7 @@ def inference_no_args(
     model: BertForSequenceClassification,
     batch_size: int,
     softmax: bool = False,
+    binary: bool = False,
 ) -> List[float]:
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     predictions = []
@@ -70,10 +71,16 @@ def inference_no_args(
                   'token_type_ids': batch[2], }
         # logits = outputs[0].cpu().numpy()[:, 1]
         outputs = model(**inputs)
-        logits = outputs[0]
-        if softmax:
-            logits = logits.log_softmax(dim=-1)
-        logits = logits[:, 1]
+        if not binary:
+            logits = outputs[0]
+            if softmax:
+                logits = logits.log_softmax(dim=-1)
+            logits = logits[:, 1]
+        else:
+            logits = outputs[0]
+            if softmax:
+                logits = logits.log_softmax(dim=-1)
+                logits = logits[:, 1]
         predictions.extend(logits.tolist())
     return predictions
 
@@ -312,11 +319,11 @@ class SimilarityProcessor(DataProcessor):
     def _create_product_examples(df):
         """Creates examples for the training and test sets."""
         examples = []
-        claim_ids = df.claim_id.to_numpy(dtype=int)
-        claim_text = df.claim_text.to_numpy(dtype=str)
+        claim_ids = df.claim_id.to_list()
+        claim_text = df.claim_text.to_list()
         claim_mapping = dict(zip(claim_ids, claim_text))
-        premise_ids = df.premise_id.to_numpy(dtype=str)
-        premise_text = df.premise_text.to_numpy(dtype=str)
+        premise_ids = df.premise_id.to_list()
+        premise_text = df.premise_text.to_list()
         premise_mapping = dict(zip(premise_ids, premise_text))
 
         for claim_id in claim_mapping:

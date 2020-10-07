@@ -332,6 +332,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
                 model=model,
                 batch_size=batch_size,
                 softmax=softmax,
+                binary=True,
             )
             precomputed_similarities = dict(zip(guids, predictions))
             torch.save(precomputed_similarities, buffer_path)
@@ -339,25 +340,29 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         self.precomputed_similarities = torch.load(buffer_path)
         self.ratio = cluster_ratio
 
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        # get premise representations
+        num_premises = len(premise_ids)
 
-def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-    # get premise representations
-    num_premises = len(premise_ids)
-    premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+        def get_vector_repr(premise_id):
+            return torch.FloatTensor([v for k, v in self.precomputed_similarities.items() if k[0] == premise_id])
 
-    # cluster premises
-    algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
-    cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
+        premise_repr = torch.stack([get_vector_repr(premise_id) for premise_id in premise_ids], dim=0)
+        # premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+        premise_repr = premise_repr.reshape(num_premises, -1)
+        # cluster premises
+        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
+        cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
 
-    def lookup_similarity(premise_id: str) -> float:
-        return self.precomputed_similarities[premise_id, claim_id]
+        def lookup_similarity(premise_id: str) -> float:
+            return self.precomputed_similarities[premise_id, claim_id]
 
-    seen_clusters = set()
-    result = []
-    mapping = dict(zip(premise_ids, cluster_assignment))
-    for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
-        cluster_id = mapping[premise_id]
-        if cluster_id not in seen_clusters:
-            result.append(premise_id)
-        seen_clusters.add(cluster_id)
-    return result[:k]
+        seen_clusters = set()
+        result = []
+        mapping = dict(zip(premise_ids, cluster_assignment))
+        for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
+            cluster_id = mapping[premise_id]
+            if cluster_id not in seen_clusters:
+                result.append(premise_id)
+            seen_clusters.add(cluster_id)
+        return result[:k]
