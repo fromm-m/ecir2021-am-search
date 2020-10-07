@@ -19,8 +19,6 @@ def main():
     parser.add_argument('--k', default=[5, 10], type=int)
     parser.add_argument('--force', action='store_true', default=False)
     args = parser.parse_args()
-    pandas.set_option('display.width', 400)
-    pandas.set_option('display.max_columns', 10)
     configs = [
         # 0. Related Work: Dumani
         dict(
