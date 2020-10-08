@@ -2,14 +2,14 @@ import logging
 import pathlib
 from abc import ABC
 from logging import Logger
+from operator import itemgetter
 from typing import Mapping, Optional, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
 
 from arclus.models.base import RankingMethod
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_SIMILARITIES, \
-    PREP_TEST_SIMILARITIES_SOFTMAX, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX, PREP_TEST_SIMILARITIES, PREP_TEST_SIMILARITIES_SOFTMAX
 from arclus.similarity import Similarity
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -226,6 +226,52 @@ class LearnedSimilarityKNN(RankingMethod):
         return sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
 
 
+def _premise_cluster_filtered(
+    claim_id: int,
+    premise_ids: Sequence[str],
+    premise_repr: torch.FloatTensor,
+    similarities: Mapping[Tuple[str, int], float],
+    k: int,
+    ratio: Optional[float],
+) -> Sequence[str]:
+    """
+    Return premises sorted by similarity to claim, filtered to contain at most one element per cluster.
+
+    :param claim_id:
+        The claim ID.
+    :param premise_ids:
+        The premise IDs.
+    :param premise_repr: shape: (num_premises, dim)
+        The corresponding representations.
+    :param similarities:
+        The pre-computed similarities.
+    :param k:
+        The number of premise IDs to return.
+    :param ratio:
+        The cluster ratio.
+
+    :return:
+        A list of (at most) k premise IDs.
+    """
+    num_premises = len(premise_ids)
+    # cluster premises
+    algorithm = KMeans(n_clusters=_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
+    cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
+
+    def lookup_similarity(premise_id: str) -> float:
+        return similarities[premise_id, claim_id]
+
+    seen_clusters = set()
+    result = []
+    mapping = dict(zip(premise_ids, cluster_assignment))
+    for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
+        cluster_id = mapping[premise_id]
+        if cluster_id not in seen_clusters:
+            result.append(premise_id)
+        seen_clusters.add(cluster_id)
+    return result[:k]
+
+
 class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
 
@@ -257,25 +303,16 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get premise representations
-        num_premises = len(premise_ids)
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
 
-        # cluster premises
-        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
-        cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
-
-        def lookup_similarity(premise_id: str) -> float:
-            return self.precomputed_similarities[premise_id, claim_id]
-
-        seen_clusters = set()
-        result = []
-        mapping = dict(zip(premise_ids, cluster_assignment))
-        for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
-            cluster_id = mapping[premise_id]
-            if cluster_id not in seen_clusters:
-                result.append(premise_id)
-            seen_clusters.add(cluster_id)
-        return result[:k]
+        return _premise_cluster_filtered(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
+            premise_repr=premise_repr,
+            similarities=self.precomputed_similarities,
+            k=k,
+            ratio=self.ratio,
+        )
 
 
 class LearnedSimilarityMatrixClusterKNN(RankingMethod):
@@ -287,11 +324,11 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
     precomputed_similarities: Mapping[Tuple[str, int], float]
 
     def __init__(
-            self,
-            cluster_ratio: Optional[float] = 0.5,
-            softmax: bool = True,
-            model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
-            cache_root: str = '/tmp/arclus/bert',
+        self,
+        cluster_ratio: Optional[float] = 0.5,
+        softmax: bool = True,
+        model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+        cache_root: str = '/tmp/arclus/bert',
     ):
         """
         Initialize the method.
@@ -319,11 +356,10 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
                 max_seq_length=512,
                 model_type="bert",
                 cache_root=cache_root,
-                product=True
+                product=True,
             )
 
             # generate logits for all claims-premise pairs
-            # predictions = inference(args, data, loader, logger, model)
             logger.info('Run inference')
             predictions = inference_no_args(
                 data=data,
@@ -338,31 +374,40 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             torch.save(precomputed_similarities, buffer_path)
 
         self.precomputed_similarities = torch.load(buffer_path)
+
+        # verify that similarities are available for all claim, premise pairs
+        premise_ids, claim_ids = [
+            sorted(set(map(itemgetter(pos), self.precomputed_similarities.keys())))
+            for pos in (0, 1)
+        ]
+        assert set(self.precomputed_similarities.keys()) == set((pid, cid) for pid in premise_ids for cid in claim_ids)
+
+        # prepare premise representations; make sure that claims are always in the same order
+        self.premise_representations = {
+            premise_id: torch.as_tensor(
+                data=[
+                    self.precomputed_similarities[premise_id, claim_id]
+                    for claim_id in claim_ids
+                ],
+                dtype=torch.float32,
+            )
+            for premise_id in premise_ids
+        }
+
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        # get premise representations
-        num_premises = len(premise_ids)
+        # get premise representations, as similarity vector to all claims
+        premise_repr = torch.stack([
+            self.premise_representations[premise_id]
+            for premise_id in premise_ids
+        ], dim=0).view(len(premise_ids), -1)
 
-        def get_vector_repr(premise_id):
-            return torch.FloatTensor([v for k, v in self.precomputed_similarities.items() if k[0] == premise_id])
-
-        premise_repr = torch.stack([get_vector_repr(premise_id) for premise_id in premise_ids], dim=0)
-        # premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
-        premise_repr = premise_repr.reshape(num_premises, -1)
-        # cluster premises
-        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=num_premises, k=k))
-        cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
-
-        def lookup_similarity(premise_id: str) -> float:
-            return self.precomputed_similarities[premise_id, claim_id]
-
-        seen_clusters = set()
-        result = []
-        mapping = dict(zip(premise_ids, cluster_assignment))
-        for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
-            cluster_id = mapping[premise_id]
-            if cluster_id not in seen_clusters:
-                result.append(premise_id)
-            seen_clusters.add(cluster_id)
-        return result[:k]
+        return _premise_cluster_filtered(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
+            premise_repr=premise_repr,
+            similarities=self.precomputed_similarities,
+            k=k,
+            ratio=self.ratio,
+        )

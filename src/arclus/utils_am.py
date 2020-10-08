@@ -40,7 +40,7 @@ def load_bert_model_and_data_no_args(
         max_seq_length=max_seq_length,
         model_type=model_type,
         cache_root=cache_root,
-        product=product
+        product=product,
     )
     sampler = SequentialSampler(data)
     guids = [o.guid for o in examples]
@@ -113,7 +113,7 @@ def load_and_cache_examples(
     max_seq_length: int,
     model_type: str,
     cache_root: str = "../../data/preprocessed",
-    product: bool = False
+    product: bool = False,
 ):
     processor = processors[task]()
     output_mode = output_modes[task]
