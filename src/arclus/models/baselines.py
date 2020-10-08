@@ -7,9 +7,9 @@ from typing import Mapping, Optional, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
-
 from arclus.models.base import RankingMethod
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX, PREP_TEST_SIMILARITIES, PREP_TEST_SIMILARITIES_SOFTMAX
+from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, \
+    PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES_CLAIMS
 from arclus.similarity import Similarity
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -184,12 +184,12 @@ class LearnedSimilarityKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        buffer_path = PREP_TEST_SIMILARITIES_SOFTMAX if softmax else PREP_TEST_SIMILARITIES
+        buffer_path = PREP_TEST_SIMILARITIES_CLAIMS
         logger.info(f'Using softmax: {softmax}')
         if not buffer_path.is_file():
             logger.info('computing similarities')
             # load bert model and the data
-            batch_size = 128
+            batch_size = 180
             logger.info('Load data')
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
@@ -212,12 +212,16 @@ class LearnedSimilarityKNN(RankingMethod):
                 logger=logger,
                 model=model,
                 batch_size=batch_size,
-                softmax=softmax,
             )
             precomputed_similarities = dict(zip(guids, predictions))
             torch.save(precomputed_similarities, buffer_path)
 
         self.precomputed_similarities = torch.load(buffer_path)
+        if softmax:
+            self.precomputed_similarities = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1] for k, v in
+                                             self.precomputed_similarities.items()}
+        else:
+            self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         def lookup_similarity(premise_id: str) -> float:
@@ -340,12 +344,13 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        buffer_path = PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX if softmax else PREP_TEST_PRODUCT_SIMILARITIES
+        buffer_path = PREP_TEST_SIMILARITIES_CLAIMS
+        buffer_path_product = PREP_TEST_PRODUCT_SIMILARITIES
         logger.info(f'Using softmax: {softmax}')
-        if not buffer_path.is_file():
+        if not buffer_path_product.is_file():
             logger.info('computing similarities')
             # load bert model and the data
-            batch_size = 128
+            batch_size = 180
             logger.info('Load data')
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
@@ -367,26 +372,35 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
                 logger=logger,
                 model=model,
                 batch_size=batch_size,
-                softmax=softmax,
-                binary=True,
             )
             precomputed_similarities = dict(zip(guids, predictions))
-            torch.save(precomputed_similarities, buffer_path)
+            torch.save(precomputed_similarities, buffer_path_product)
 
         self.precomputed_similarities = torch.load(buffer_path)
-
+        self.precomputed_similarities_resultclaims = torch.load(buffer_path_product)
+        if softmax:
+            self.precomputed_similarities = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1] for k, v in
+                                             self.precomputed_similarities.items()}
+            self.precomputed_similarities_resultclaims = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1]
+                                                          for k, v in
+                                                          self.precomputed_similarities_resultclaims.items()}
+        else:
+            self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
+            self.precomputed_similarities_resultclaims = {k: v[1] for k, v in self.precomputed_similarities_resultclaims.items()}
         # verify that similarities are available for all claim, premise pairs
         premise_ids, claim_ids = [
-            sorted(set(map(itemgetter(pos), self.precomputed_similarities.keys())))
+            sorted(set(map(itemgetter(pos), self.precomputed_similarities_resultclaims.keys())))
+
             for pos in (0, 1)
         ]
-        assert set(self.precomputed_similarities.keys()) == set((pid, cid) for pid in premise_ids for cid in claim_ids)
+        assert set(self.precomputed_similarities_resultclaims.keys()) == set(
+            (pid, cid) for pid in premise_ids for cid in claim_ids)
 
         # prepare premise representations; make sure that claims are always in the same order
         self.premise_representations = {
             premise_id: torch.as_tensor(
                 data=[
-                    self.precomputed_similarities[premise_id, claim_id]
+                    self.precomputed_similarities_resultclaims[premise_id, claim_id]
                     for claim_id in claim_ids
                 ],
                 dtype=torch.float32,

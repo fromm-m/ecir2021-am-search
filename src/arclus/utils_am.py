@@ -54,8 +54,6 @@ def inference_no_args(
     logger: Logger,
     model: BertForSequenceClassification,
     batch_size: int,
-    softmax: bool = False,
-    binary: bool = False,
 ) -> List[float]:
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     predictions = []
@@ -71,16 +69,7 @@ def inference_no_args(
                   'token_type_ids': batch[2], }
         # logits = outputs[0].cpu().numpy()[:, 1]
         outputs = model(**inputs)
-        if not binary:
-            logits = outputs[0]
-            if softmax:
-                logits = logits.log_softmax(dim=-1)
-            logits = logits[:, 1]
-        else:
-            logits = outputs[0]
-            if softmax:
-                logits = logits.log_softmax(dim=-1)
-                logits = logits[:, 1]
+        logits = outputs[0]
         predictions.extend(logits.tolist())
     return predictions
 

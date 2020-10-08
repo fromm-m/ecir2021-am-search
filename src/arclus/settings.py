@@ -39,7 +39,5 @@ NEGATIVE_SAMPLES = DATA_ROOT / 'preprocessed' / 'negatives.csv'
 NUM_NEG_PER_POS = 1
 
 # Similarities
-PREP_TEST_SIMILARITIES = DATA_ROOT / 'similarities' / 'test_similarities.pt'
-PREP_TEST_SIMILARITIES_SOFTMAX = DATA_ROOT / 'similarities' / 'test_similarities_softmax.pt'
+PREP_TEST_SIMILARITIES_CLAIMS = DATA_ROOT / 'similarities' / 'test_similarities.pt'
 PREP_TEST_PRODUCT_SIMILARITIES = DATA_ROOT / 'similarities' / 'test_product_similarities.pt'
-PREP_TEST_PRODUCT_SIMILARITIES_SOFTMAX = DATA_ROOT / 'similarities' / 'test_product_similarities_softmax.pt'
