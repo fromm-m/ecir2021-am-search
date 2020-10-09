@@ -355,24 +355,47 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         )
 
 
-def _get_premise_representations(cache_root, model_path, softmax):
-    precomputed_similarities_resultclaims = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=True))
-    if softmax:
-        precomputed_similarities_resultclaims = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1]
-                                                 for k, v in
-                                                 precomputed_similarities_resultclaims.items()}
-    else:
-        precomputed_similarities_resultclaims = {k: v[1] for k, v in precomputed_similarities_resultclaims.items()}
+def _get_premise_representations(
+    cache_root: str,
+    model_path: str,
+    softmax: bool,
+) -> Mapping[str, torch.FloatTensor]:
+    # Load similarities
+    sim = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=True))
+
     # verify that similarities are available for all claim, premise pairs
     premise_ids, claim_ids = [
-        sorted(set(map(itemgetter(pos), precomputed_similarities_resultclaims.keys())))
+        sorted(set(map(itemgetter(pos), sim.keys())))
         for pos in (0, 1)
     ]
-    assert set(precomputed_similarities_resultclaims.keys()) == set(
-        (pid, cid) for pid in premise_ids for cid in claim_ids)
-    # prepare premise representations; make sure that claims are always in the same order
-    premise_representations = {premise_id: torch.as_tensor(data=[precomputed_similarities_resultclaims[premise_id, claim_id] for claim_id in claim_ids], dtype=torch.float32, ) for premise_id in premise_ids}
-    return premise_representations
+    assert set(sim.keys()) == set(
+        (pid, cid)
+        for pid in premise_ids
+        for cid in claim_ids
+    )
+
+    # convert to tensor, shape: (num_premises, num_claims, 2)
+    sim = torch.as_tensor(
+        data=[
+            [
+                sim[premise_id, claim_id]
+                for claim_id in claim_ids
+            ]
+            for premise_id in premise_ids
+        ],
+        dtype=torch.float32,
+    )
+    assert sim.shape == (len(premise_ids), len(claim_ids), 2)
+
+    # apply softmax is requested
+    if softmax:
+        sim = sim.softmax(dim=-1)
+
+    # take probability of "similar" class
+    sim = sim[:, :, 1]
+
+    # one row corresponds to one premise representation
+    return dict(zip(premise_ids, sim))
 
 
 class LearnedSimilarityMatrixClusterKNN(RankingMethod):
