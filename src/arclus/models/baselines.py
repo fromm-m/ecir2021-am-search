@@ -1,3 +1,4 @@
+"""Implementation os baseline ranking methods."""
 import logging
 import pathlib
 from abc import ABC
