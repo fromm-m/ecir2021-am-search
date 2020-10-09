@@ -355,6 +355,26 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         )
 
 
+def _get_premise_representations(cache_root, model_path, softmax):
+    precomputed_similarities_resultclaims = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=True))
+    if softmax:
+        precomputed_similarities_resultclaims = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1]
+                                                 for k, v in
+                                                 precomputed_similarities_resultclaims.items()}
+    else:
+        precomputed_similarities_resultclaims = {k: v[1] for k, v in precomputed_similarities_resultclaims.items()}
+    # verify that similarities are available for all claim, premise pairs
+    premise_ids, claim_ids = [
+        sorted(set(map(itemgetter(pos), precomputed_similarities_resultclaims.keys())))
+        for pos in (0, 1)
+    ]
+    assert set(precomputed_similarities_resultclaims.keys()) == set(
+        (pid, cid) for pid in premise_ids for cid in claim_ids)
+    # prepare premise representations; make sure that claims are always in the same order
+    premise_representations = {premise_id: torch.as_tensor(data=[precomputed_similarities_resultclaims[premise_id, claim_id] for claim_id in claim_ids], dtype=torch.float32, ) for premise_id in premise_ids}
+    return premise_representations
+
+
 class LearnedSimilarityMatrixClusterKNN(RankingMethod):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
 
@@ -381,35 +401,8 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         logger.info(f'Using softmax: {softmax}')
-        self.precomputed_similarities_resultclaims = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=True))
         self.precomputed_similarities = _get_query_claim_similarities(cache_root=cache_root, model_path=model_path, softmax=softmax)
-        if softmax:
-            self.precomputed_similarities_resultclaims = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1]
-                                                          for k, v in
-                                                          self.precomputed_similarities_resultclaims.items()}
-        else:
-            self.precomputed_similarities_resultclaims = {k: v[1] for k, v in self.precomputed_similarities_resultclaims.items()}
-        # verify that similarities are available for all claim, premise pairs
-        premise_ids, claim_ids = [
-            sorted(set(map(itemgetter(pos), self.precomputed_similarities_resultclaims.keys())))
-
-            for pos in (0, 1)
-        ]
-        assert set(self.precomputed_similarities_resultclaims.keys()) == set(
-            (pid, cid) for pid in premise_ids for cid in claim_ids)
-
-        # prepare premise representations; make sure that claims are always in the same order
-        self.premise_representations = {
-            premise_id: torch.as_tensor(
-                data=[
-                    self.precomputed_similarities_resultclaims[premise_id, claim_id]
-                    for claim_id in claim_ids
-                ],
-                dtype=torch.float32,
-            )
-            for premise_id in premise_ids
-        }
-
+        self.premise_representations = _get_premise_representations(cache_root=cache_root, model_path=model_path, softmax=softmax)
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
