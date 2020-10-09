@@ -217,13 +217,9 @@ def _prepare_claim_similarities(
 
 
 def _get_query_claim_similarities(
-    cache_root: str,
-    model_path: str,
-    softmax: bool
+    sim: Mapping[Tuple[str, int], float],
+    softmax: bool,
 ) -> Mapping[Tuple[str, int], float]:
-    # get precomputed similarities
-    sim = torch.load(_prepare_claim_similarities(cache_root, model_path, product=False))
-
     # ensure consistent order
     pairs = sorted(sim.keys())
 
@@ -309,7 +305,14 @@ class LearnedSimilarityKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         logger.info(f'Using softmax: {softmax}')
-        self.precomputed_similarities = _get_query_claim_similarities(cache_root, model_path, softmax)
+        self.precomputed_similarities = _get_query_claim_similarities(
+            sim=torch.load(_prepare_claim_similarities(
+                cache_root=cache_root,
+                model_path=model_path,
+                product=False,
+            )),
+            softmax=softmax,
+        )
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         def lookup_similarity(premise_id: str) -> float:
@@ -433,7 +436,14 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         logger.info(f'Using softmax: {softmax}')
-        self.precomputed_similarities = _get_query_claim_similarities(cache_root=cache_root, model_path=model_path, softmax=softmax)
+        self.precomputed_similarities = _get_query_claim_similarities(
+            sim=torch.load(_prepare_claim_similarities(
+                cache_root=cache_root,
+                model_path=model_path,
+                product=False,
+            )),
+            softmax=softmax,
+        )
         self.premise_representations = _get_premise_representations(
             sim=torch.load(_prepare_claim_similarities(
                 cache_root=cache_root,
