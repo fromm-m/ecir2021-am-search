@@ -7,9 +7,9 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Type
 
 import torch
 
-from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
+from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, get_query_claim_similarities
 from arclus.similarity import LpSimilarity
 
 
@@ -108,3 +108,30 @@ class ZeroShotClusterKNNTests2(ZeroShotTests, unittest.TestCase):
         cluster_ratio=1.0,
         cluster_representative='closest-to-claim',
     )
+
+
+def test_get_query_claim_similarities():
+    """Test get_query_claim_similarities."""
+    num_premises = 7
+    num_claims = 5
+    # sparse information, i.e. not every claim-premise pair has precomputed similarities
+    drop_prob = .5
+    old_sim = {
+        (premise_id, claim_id): 10.0 * torch.rand(2, )
+        for premise_id in map(str, range(num_premises))
+        for claim_id in range(num_claims)
+        if random.random() > drop_prob
+    }
+    for softmax in (False, True):
+        sim = get_query_claim_similarities(
+            sim=old_sim,
+            softmax=softmax,
+        )
+        assert set(sim.keys()) == set(old_sim.keys())
+        for v in sim.values():
+            assert torch.is_tensor(v)
+            assert v.dtype == torch.float32
+            # scalar
+            assert v.numel() == 1
+            if softmax:
+                assert 0 <= v.item() <= 1

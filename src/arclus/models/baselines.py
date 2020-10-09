@@ -235,12 +235,12 @@ def get_query_claim_similarities(
     pairs = sorted(sim.keys())
 
     # create tensor,shape: (num_pairs, 2)
-    sim = torch.as_tensor(
-        data=[
-            sim[pair]
+    sim = torch.stack(
+        tensors=[
+            torch.as_tensor(sim[pair])
             for pair in pairs
         ],
-        dtype=torch.float32,
+        dim=0,
     )
 
     # apply softmax is requested
@@ -248,7 +248,7 @@ def get_query_claim_similarities(
         sim = sim.softmax(dim=-1)
 
     # take probability of "similar" class
-    sim = sim[:, :, 1]
+    sim = sim[:, 1]
 
     # one row corresponds to one pair similarity
     return dict(zip(pairs, sim))
