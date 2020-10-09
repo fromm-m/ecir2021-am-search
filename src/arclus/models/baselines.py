@@ -216,10 +216,21 @@ def _prepare_claim_similarities(
     return output_path
 
 
-def _get_query_claim_similarities(
+def get_query_claim_similarities(
     sim: Mapping[Tuple[str, int], float],
     softmax: bool,
 ) -> Mapping[Tuple[str, int], float]:
+    """
+    Preprocess query claim similarities.
+
+    :param sim:
+        A mapping from (premise_id, claim_id) to the logits of the similarity model, shape: (2,).
+    :param softmax:
+        Whether to apply softmax or use raw logits.
+
+    :return:
+        A mapping from (premise_id, claim_id) to scalar similarity value.
+    """
     # ensure consistent order
     pairs = sorted(sim.keys())
 
@@ -243,10 +254,21 @@ def _get_query_claim_similarities(
     return dict(zip(pairs, sim))
 
 
-def _get_premise_representations(
+def get_premise_representations(
     sim: Mapping[Tuple[float, int], float],
     softmax: bool,
 ) -> Mapping[str, torch.FloatTensor]:
+    """
+    Construct premise representations as similarity vectors to claims.
+
+    :param sim:
+        The similarities for (premise_id, claim_id) pairs.
+    :param softmax
+        Whether to apply softmax or use raw logits.
+
+    :return:
+        A mapping from premise_id to a vector of similarities, shape: (num_claims,).
+    """
     # verify that similarities are available for all claim, premise pairs
     premise_ids, claim_ids = [
         sorted(set(map(itemgetter(pos), sim.keys())))
@@ -305,7 +327,7 @@ class LearnedSimilarityKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         logger.info(f'Using softmax: {softmax}')
-        self.precomputed_similarities = _get_query_claim_similarities(
+        self.precomputed_similarities = get_query_claim_similarities(
             sim=torch.load(_prepare_claim_similarities(
                 cache_root=cache_root,
                 model_path=model_path,
@@ -436,7 +458,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         logger.info(f'Using softmax: {softmax}')
-        self.precomputed_similarities = _get_query_claim_similarities(
+        self.precomputed_similarities = get_query_claim_similarities(
             sim=torch.load(_prepare_claim_similarities(
                 cache_root=cache_root,
                 model_path=model_path,
@@ -444,7 +466,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             )),
             softmax=softmax,
         )
-        self.premise_representations = _get_premise_representations(
+        self.premise_representations = get_premise_representations(
             sim=torch.load(_prepare_claim_similarities(
                 cache_root=cache_root,
                 model_path=model_path,
