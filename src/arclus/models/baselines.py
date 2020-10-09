@@ -220,18 +220,30 @@ def _get_query_claim_similarities(
     model_path: str,
     softmax: bool
 ) -> Mapping[Tuple[str, int], float]:
-    precomputed_similarities = torch.load(_prepare_claim_similarities(cache_root, model_path, product=False))
+    # get precomputed similarities
+    sim = torch.load(_prepare_claim_similarities(cache_root, model_path, product=False))
+
+    # ensure consistent order
+    pairs = sorted(sim.keys())
+
+    # create tensor,shape: (num_pairs, 2)
+    sim = torch.as_tensor(
+        data=[
+            sim[pair]
+            for pair in pairs
+        ],
+        dtype=torch.float32,
+    )
+
+    # apply softmax is requested
     if softmax:
-        precomputed_similarities = {
-            premise_claim_pair: torch.softmax(torch.as_tensor(similarity, dtype=torch.float32), dim=-1)[1].item()
-            for premise_claim_pair, similarity in precomputed_similarities.items()
-        }
-    else:
-        precomputed_similarities = {
-            premise_claim_pair: similarity[1]
-            for premise_claim_pair, similarity in precomputed_similarities.items()
-        }
-    return precomputed_similarities
+        sim = sim.softmax(dim=-1)
+
+    # take probability of "similar" class
+    sim = sim[:, :, 1]
+
+    # one row corresponds to one pair similarity
+    return dict(zip(pairs, sim))
 
 
 class LearnedSimilarityKNN(RankingMethod):
