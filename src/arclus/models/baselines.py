@@ -240,10 +240,15 @@ class LearnedSimilarityKNN(RankingMethod):
         logger.info(f'Using softmax: {softmax}')
         self.precomputed_similarities = torch.load(_prepare_claim_similarities(cache_root, model_path, product=False))
         if softmax:
-            self.precomputed_similarities = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1] for k, v in
-                                             self.precomputed_similarities.items()}
+            self.precomputed_similarities = {
+                premise_claim_pair: torch.softmax(torch.as_tensor(similarity, dtype=torch.float32), dim=-1)[1]
+                for premise_claim_pair, similarity in self.precomputed_similarities.items()
+            }
         else:
-            self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
+            self.precomputed_similarities = {
+                premise_claim_pair: similarity[1]
+                for premise_claim_pair, similarity in self.precomputed_similarities.items()
+            }
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         def lookup_similarity(premise_id: str) -> float:
@@ -367,10 +372,8 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             The directory where temporary BERT inference files are stored.
         """
         logger.info(f'Using softmax: {softmax}')
-        self.precomputed_similarities_resultclaims = torch.load(_prepare_claim_similarities(cache_root, model_path, product=True))
-
-        buffer_path = PREP_TEST_SIMILARITIES_CLAIMS
-        self.precomputed_similarities = torch.load(buffer_path)
+        self.precomputed_similarities_resultclaims = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=True))
+        self.precomputed_similarities = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=False))
         if softmax:
             self.precomputed_similarities = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1] for k, v in
                                              self.precomputed_similarities.items()}
