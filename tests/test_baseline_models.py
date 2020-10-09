@@ -9,7 +9,7 @@ import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, get_query_claim_similarities
+from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, get_premise_representations, get_query_claim_similarities
 from arclus.similarity import LpSimilarity
 
 
@@ -135,3 +135,27 @@ def test_get_query_claim_similarities():
             assert v.numel() == 1
             if softmax:
                 assert 0 <= v.item() <= 1
+
+
+def test_get_premise_representations():
+    """Test get_premise_representations."""
+    num_premises = 7
+    num_claims = 5
+    premise_ids = list(map(str, range(num_premises)))
+    old_sim = {
+        (premise_id, claim_id): 10.0 * torch.rand(2, )
+        for premise_id in premise_ids
+        for claim_id in range(num_claims)
+    }
+    for softmax in (False, True):
+        sim = get_premise_representations(
+            sim=old_sim,
+            softmax=softmax,
+        )
+        assert set(sim.keys()) == set(premise_ids)
+        for v in sim.values():
+            assert torch.is_tensor(v)
+            assert v.dtype == torch.float32
+            assert v.shape == (num_claims,)
+            if softmax:
+                assert (v >= 0).all() and (v <= 1).all()

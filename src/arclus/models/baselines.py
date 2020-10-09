@@ -237,7 +237,7 @@ def get_query_claim_similarities(
     # create tensor,shape: (num_pairs, 2)
     sim = torch.stack(
         tensors=[
-            torch.as_tensor(sim[pair])
+            torch.as_tensor(data=sim[pair], dtype=torch.float32)
             for pair in pairs
         ],
         dim=0,
@@ -281,15 +281,18 @@ def get_premise_representations(
     )
 
     # convert to tensor, shape: (num_premises, num_claims, 2)
-    sim = torch.as_tensor(
-        data=[
-            [
-                sim[premise_id, claim_id]
-                for claim_id in claim_ids
-            ]
+    sim = torch.stack(
+        tensors=[
+            torch.stack(
+                tensors=[
+                    torch.as_tensor(data=sim[premise_id, claim_id], dtype=torch.float32)
+                    for claim_id in claim_ids
+                ],
+                dim=0,
+            )
             for premise_id in premise_ids
         ],
-        dtype=torch.float32,
+        dim=0,
     )
     assert sim.shape == (len(premise_ids), len(claim_ids), 2)
 
