@@ -248,13 +248,9 @@ def _get_query_claim_similarities(
 
 
 def _get_premise_representations(
-    cache_root: str,
-    model_path: str,
+    sim: Mapping[Tuple[float, int], float],
     softmax: bool,
 ) -> Mapping[str, torch.FloatTensor]:
-    # Load similarities
-    sim = torch.load(_prepare_claim_similarities(cache_root=cache_root, model_path=model_path, product=True))
-
     # verify that similarities are available for all claim, premise pairs
     premise_ids, claim_ids = [
         sorted(set(map(itemgetter(pos), sim.keys())))
@@ -438,7 +434,14 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         """
         logger.info(f'Using softmax: {softmax}')
         self.precomputed_similarities = _get_query_claim_similarities(cache_root=cache_root, model_path=model_path, softmax=softmax)
-        self.premise_representations = _get_premise_representations(cache_root=cache_root, model_path=model_path, softmax=softmax)
+        self.premise_representations = _get_premise_representations(
+            sim=torch.load(_prepare_claim_similarities(
+                cache_root=cache_root,
+                model_path=model_path,
+                product=True,
+            )),
+            softmax=softmax,
+        )
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
