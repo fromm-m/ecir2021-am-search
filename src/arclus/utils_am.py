@@ -57,6 +57,7 @@ def inference_no_args(
 ) -> List[float]:
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     predictions = []
+    states = []
     logger.info("***** Running inference {} *****".format(""))
     logger.info("  Num examples = %d", len(data))
     logger.info("  Batch size = %d", batch_size)
@@ -64,14 +65,10 @@ def inference_no_args(
     model.eval()
     for batch in tqdm(loader, desc="Inference"):
         batch = tuple(t.to(device) for t in batch)
-        inputs = {'input_ids': batch[0],
-                  'attention_mask': batch[1],
-                  'token_type_ids': batch[2], }
-        # logits = outputs[0].cpu().numpy()[:, 1]
-        outputs = model(**inputs)
-        logits = outputs[0]
-        predictions.extend(logits.tolist())
-    return predictions
+        logits, state = model.forward(input_ids=batch[0], attention_mask=batch[1], token_type_ids=batch[2], output_hidden_states=True)
+        predictions.extend(logits.cpu())
+        states.extend(state[-1][:,0,:].cpu())
+    return predictions, states
 
 
 @torch.no_grad()
@@ -210,6 +207,7 @@ def convert_examples_to_features(
             example.text_b,
             add_special_tokens=True,
             max_length=max_length,
+            truncation_strategy="longest_first"
         )
         input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
 
@@ -308,8 +306,8 @@ class SimilarityProcessor(DataProcessor):
     def _create_product_examples(df):
         """Creates examples for the training and test sets."""
         examples = []
-        claim_ids = df.claim_id.to_list()
-        claim_text = df.claim_text.to_list()
+        claim_ids = df.resultClaimID.to_list()
+        claim_text = df.resultClaim.to_list()
         claim_mapping = dict(zip(claim_ids, claim_text))
         premise_ids = df.premise_id.to_list()
         premise_text = df.premise_text.to_list()
