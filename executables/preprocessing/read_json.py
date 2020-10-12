@@ -3,7 +3,8 @@ import logging
 import pathlib
 
 import pandas
-from preprocessing.dataset_reader import DebateWiseReader, DebateOrgReader, DebatePediaOrgReader, IDebateOrgReader, remove_duplicates
+
+from arclus.preprocessing.dataset_reader import DebateOrgReader, DebatePediaOrgReader, DebateWiseReader, IDebateOrgReader, remove_duplicates
 
 
 def main():
