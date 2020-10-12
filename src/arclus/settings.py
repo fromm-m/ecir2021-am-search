@@ -35,6 +35,7 @@ CLAIMS_TEST_FEATURES = DATA_ROOT / 'features' / 'claims_test_embeddings.pt'
 PREMISES_TEST_FEATURES = DATA_ROOT / 'features' / 'premises_test_embeddings.pt'
 # Negative Sampling
 NEGATIVE_SAMPLES = DATA_ROOT / 'preprocessed' / 'negatives.csv'
+POSITIVE_SAMPLES = DATA_ROOT / 'preprocessed' / "positives.csv"
 # one negative per positive
 NUM_NEG_PER_POS = 1
 

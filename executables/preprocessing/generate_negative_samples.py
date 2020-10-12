@@ -1,45 +1,38 @@
+"""Script to generate all negative samples for training."""
+import argparse
+
 import pandas as pd
-import torch
 
-from arclus.negative_sampling import NegativeSampler
-from arclus.settings import NEGATIVE_SAMPLES, NUM_NEG_PER_POS, PREP_ASSIGNMENTS, PREP_CLAIMS, PREP_PREMISES
+from arclus.settings import NEGATIVE_SAMPLES, POSITIVE_SAMPLES, PREP_ASSIGNMENTS, PREP_CLAIMS
 
 
-def main():
-    # the true samples, a tensor of shape (n, 2)
+def main(*keywords: str):
     assignments = pd.read_csv(PREP_ASSIGNMENTS)
-    premises = pd.read_csv(PREP_PREMISES)
     claims = pd.read_csv(PREP_CLAIMS)
-    true_samples = torch.from_numpy(assignments[['claim_id', 'premise_id']].values)
 
-    premises = premises[["premise_text"]].values
-    claims = claims[["claim_text"]].values
+    # filter claims by keywords
+    claims: pd.DataFrame = claims.loc[claims["claim_text"].str.contains('|'.join(f'({key})' for key in keywords), regex=True), ["claim_id"]]
+    pairs = claims.merge(right=assignments, how="inner", on="claim_id")
 
-    # We can increase this. If batch_size = num_samples, we have one a single batch. This may have large memory requirements
-    batch_size = 1024
-    # Instantiate the sampler
-    sampler = NegativeSampler(num_premises=len(premises), num_claims=len(claims), num_neg_per_pos=NUM_NEG_PER_POS)
-    columns = ["claim_id", "premise_id"]
-    negative_samples = pd.DataFrame(columns=columns)
+    # save positive pairs
+    pairs.to_csv(POSITIVE_SAMPLES)
 
-    # Generate negative samples
-    for batch in true_samples.split(batch_size):
-        # negative batch contains the IDs of claim / premise pairs.
-        corrupt_premises = sampler.sample(batch=batch, corrupt_premises=True)  # lookup strings
-        neg_batch = torch.stack([
-            batch[:, 0].view(-1, 1).repeat(1, corrupt_premises.shape[1]),
-            corrupt_premises
-        ], dim=-1)
-        # view as a large batch
-        neg_batch = neg_batch.view(-1, 2)
-        # negative_batch_str = [
-        #    claims[claim_id] + ' ||| ' + premises[premise_id]
-        #    for claim_id, premise_id in neg_batch.tolist()
-        # ]
-        temp_df = pd.DataFrame(neg_batch.tolist(), columns=columns)
-        negative_samples = negative_samples.append(temp_df)
-    negative_samples.to_csv(NEGATIVE_SAMPLES)
+    # save all negative pairs
+    all_positives = set(zip(pairs["premise_id"].tolist(), pairs["claim_id"].tolist()))
+    all_premises, all_claims = set(pairs[col].unique().tolist() for col in ["premise_id", "claim_id"])
+    all_negatives = {
+        (pid, cid)
+        for pid in all_premises
+        for cid in all_claims
+        if (pid, cid) not in all_positives
+    }
+    negative_pairs = pd.DataFrame(data=list(all_negatives), columns=["premise_id", "claim_id"])
+    negative_pairs.to_csv(NEGATIVE_SAMPLES)
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--keyword', nargs='+', type=str)
+    args = parser.parse_args()
+
+    main(keywords=args.keyword)
