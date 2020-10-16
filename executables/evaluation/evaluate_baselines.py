@@ -10,15 +10,20 @@ import tqdm
 from arclus.evaluation import evaluate_ranking_method
 from arclus.models import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
+from arclus.settings import DATA_ROOT
+logging.basicConfig(level=logging.ERROR)
 
 
 def main():
+
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_root', default='results', type=str)
     parser.add_argument('--k', default=[5, 10], type=int)
     parser.add_argument('--force', action='store_true', default=False)
     args = parser.parse_args()
+    similarities = DATA_ROOT / 'similarities'
+    model_path = '/nfs/data3/fromm/argument_clustering/models/c23f9dd98bc24f17bf430fb7c3db0e39'
     configs = [
         # 0. Related Work: Dumani
         dict(
@@ -66,6 +71,8 @@ def main():
             name='learned_similarity_matrix_cluster_knn',
             softmax=softmax,
             cluster_ratio=cluster_ratio,
+            similarities_dir=similarities,
+            model_path=model_path
         )
         for softmax in (False, True)
         for cluster_ratio in (0.25, 0.5, 1.0, None)

@@ -22,11 +22,11 @@ class Dumani(RankingMethod):
         self.cluster_col = f"premiseClusterID_{column}"
         df = load_assignments_with_numeric_relevance()
         df["premise_text_length"] = df["premise_text"].fillna('').apply(len)
-        self.data = df[["premise_id", "premise_text_length", self.sort_col, self.cluster_col]].copy()
+        self.data = df[["premise_id", "premise_text_length", "claim_id", self.sort_col, self.cluster_col]].copy()
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # select precompute data for this claim
-        selection = self.data.loc[self.data["premise_id"].isin(premise_ids)]
+        selection = self.data.loc[self.data['claim_id'] == claim_id]
         # select longest premise from each cluster
         result = []
         for _, cluster in selection.groupby(by=self.cluster_col):

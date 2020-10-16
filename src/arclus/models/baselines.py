@@ -170,8 +170,9 @@ class LearnedSimilarityKNN(RankingMethod):
 
     def __init__(
         self,
-        softmax: bool = True,
-        model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+        softmax: bool,
+        model_path: str,
+        similarities_dir: str,
         cache_root: str = '/tmp/arclus/bert',
     ):
         """
@@ -184,13 +185,13 @@ class LearnedSimilarityKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        buffer_path_sim = PREP_TEST_SIMILARITIES
-        buffer_path_states = PREP_TEST_STATES
+        buffer_path_sim = similarities_dir + PREP_TEST_SIMILARITIES
+        buffer_path_states = similarities_dir + PREP_TEST_STATES
         logger.info(f'Using softmax: {softmax}')
         if not buffer_path_sim.is_file() or not buffer_path_states.is_file():
             logger.info('computing similarities')
             # load bert model and the data
-            batch_size = 90
+            batch_size = 120
             logger.info('Load data')
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
@@ -286,10 +287,10 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
 
     def __init__(
         self,
-        cluster_ratio: Optional[float] = 0.5,
-        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
-        softmax: bool = True,
-        model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+        cluster_ratio: float,
+        softmax: bool,
+        model_path: str,
+        similarities_dir: str,
         cache_root: str = '/tmp/arclus/bert',
     ):
         """
@@ -306,9 +307,9 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        super().__init__(model_path=model_path, cache_root=cache_root, softmax=softmax)
+        super().__init__(model_path=model_path, cache_root=cache_root, softmax=softmax,
+                         similarities_dir=similarities_dir)
         self.ratio = cluster_ratio
-        #self.premises = torch.load(premises_path)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get premise representations
@@ -334,9 +335,10 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
 
     def __init__(
         self,
-        cluster_ratio: Optional[float] = 0.5,
-        softmax: bool = True,
-        model_path: str = '/nfs/data3/fromm/argument_clustering/models/d3d4a9c7c23a4b85a20836a754e3aa56',
+        cluster_ratio: float,
+        softmax: bool,
+        model_path: str,
+        similarities_dir: str,
         cache_root: str = '/tmp/arclus/bert',
     ):
         """
@@ -349,13 +351,13 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        buffer_path = PREP_TEST_SIMILARITIES
-        buffer_path_product = PREP_TEST_PRODUCT_SIMILARITIES
+        buffer_path = similarities_dir + PREP_TEST_SIMILARITIES
+        buffer_path_product = similarities_dir + PREP_TEST_PRODUCT_SIMILARITIES
         logger.info(f'Using softmax: {softmax}')
         if not buffer_path_product.is_file():
             logger.info('computing similarities')
             # load bert model and the data
-            batch_size = 90
+            batch_size = 120
             logger.info('Load data')
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
@@ -391,7 +393,8 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
                                                           self.precomputed_similarities_resultclaims.items()}
 
         self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
-        self.precomputed_similarities_resultclaims = {k: v[1] for k, v in self.precomputed_similarities_resultclaims.items()}
+        self.precomputed_similarities_resultclaims = {k: v[1] for k, v in
+                                                      self.precomputed_similarities_resultclaims.items()}
         # verify that similarities are available for all claim, premise pairs
         premise_ids, claim_ids = [
             sorted(set(map(itemgetter(pos), self.precomputed_similarities_resultclaims.keys())))
