@@ -8,7 +8,6 @@ from typing import Mapping, Optional, Sequence, Tuple
 from pathlib import Path
 import torch
 from sklearn.cluster import KMeans
-import torch.tensor as tens
 
 from arclus.models.base import RankingMethod
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, \
@@ -570,7 +569,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get premise representations, as similarity vector to all claims
         premise_repr = torch.stack([torch.FloatTensor([v for k, v in self.precomputed_similarities_resultclaims.items()
-                                                  if k[0] == premise_id]) for premise_id in premise_ids], dim=0)
+                                                       if k[0] == premise_id]) for premise_id in premise_ids], dim=0)
 
         return _premise_cluster_filtered(
             claim_id=claim_id,
