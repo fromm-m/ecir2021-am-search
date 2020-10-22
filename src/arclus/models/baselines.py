@@ -5,7 +5,7 @@ from abc import ABC
 from logging import Logger
 from operator import itemgetter
 from typing import Mapping, Optional, Sequence, Tuple
-
+from pathlib import Path
 import torch
 from sklearn.cluster import KMeans
 
@@ -183,7 +183,7 @@ def _prepare_claim_similarities(
         The path of the precomputed similarities.
     """
     output_path = PREP_TEST_PRODUCT_SIMILARITIES if product else PREP_TEST_SIMILARITIES
-    if not output_path.is_file():
+    if not Path(output_path).is_file():
         logger.info('computing similarities')
         # load bert model and the data
         batch_size = 180
@@ -500,18 +500,24 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         if not buffer_path_product.is_file():
             logger.info('computing similarities')
             # load bert model and the data
-            batch_size = 120
             logger.info('Load data')
+            batch_size=120
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
-                product=False,
-                softmax=softmax,
+                task_name="SIM",
+                batch_size=batch_size,
+                data_dir=PREP_ASSIGNMENTS_TEST,
+                overwrite_cache=True,
+                max_seq_length=512,
+                model_type="bert",
+                cache_root=cache_root,
+                product=False
             )
-            self.premise_representations = get_premise_representations(
-                sim=torch.load(_prepare_claim_similarities(
-                    cache_root=cache_root,
-                    model_path=model_path,
-                    product=True)))
+            #self.premise_representations = get_premise_representations(
+            #    sim=torch.load(_prepare_claim_similarities(
+            #        cache_root=cache_root,
+            #        model_path=model_path,
+            #       product=True)))
 
             # generate logits for all claims-premise pairs
             logger.info('Run inference')
