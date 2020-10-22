@@ -182,7 +182,7 @@ def _prepare_claim_similarities(
     :return:
         The path of the precomputed similarities.
     """
-    output_path = PREP_TEST_PRODUCT_SIMILARITIES if product else PREP_TEST_SIMILARITIES_CLAIMS
+    output_path = PREP_TEST_PRODUCT_SIMILARITIES if product else PREP_TEST_SIMILARITIES
     if not output_path.is_file():
         logger.info('computing similarities')
         # load bert model and the data
@@ -505,15 +505,13 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
                 product=False,
-            )),
-            softmax=softmax,
-        )
-        self.premise_representations = get_premise_representations(
-            sim=torch.load(_prepare_claim_similarities(
-                cache_root=cache_root,
-                model_path=model_path,
-                product=True,
+                softmax=softmax,
             )
+            self.premise_representations = get_premise_representations(
+                sim=torch.load(_prepare_claim_similarities(
+                    cache_root=cache_root,
+                    model_path=model_path,
+                    product=True)))
 
             # generate logits for all claims-premise pairs
             logger.info('Run inference')
