@@ -501,7 +501,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             logger.info('computing similarities')
             # load bert model and the data
             logger.info('Load data')
-            batch_size=120
+            batch_size = 120
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
                 task_name="SIM",
@@ -513,7 +513,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
                 cache_root=cache_root,
                 product=False
             )
-            #self.premise_representations = get_premise_representations(
+            # self.premise_representations = get_premise_representations(
             #    sim=torch.load(_prepare_claim_similarities(
             #        cache_root=cache_root,
             #        model_path=model_path,
