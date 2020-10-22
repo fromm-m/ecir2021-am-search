@@ -1,3 +1,4 @@
+"""Implementation os baseline ranking methods."""
 import logging
 import pathlib
 from abc import ABC
@@ -7,6 +8,7 @@ from typing import Mapping, Optional, Sequence, Tuple
 
 import torch
 from sklearn.cluster import KMeans
+
 from arclus.models.base import RankingMethod
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, \
     PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
@@ -160,6 +162,147 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids]
+
+
+def _prepare_claim_similarities(
+    cache_root: str,
+    model_path: str,
+    product: bool,
+) -> pathlib.Path:
+    """
+    Prepare similarities.
+
+    :param cache_root:
+        The cache_root for the model.
+    :param model_path:
+        The path to the model.
+    :param product:
+        Whether to compute similarities to all result_claims, or only to the relevant query claims.
+
+    :return:
+        The path of the precomputed similarities.
+    """
+    output_path = PREP_TEST_PRODUCT_SIMILARITIES if product else PREP_TEST_SIMILARITIES_CLAIMS
+    if not output_path.is_file():
+        logger.info('computing similarities')
+        # load bert model and the data
+        batch_size = 180
+        logger.info('Load data')
+        loader, data, model, guids = load_bert_model_and_data_no_args(
+            model_path=model_path,
+            task_name="SIM",
+            batch_size=batch_size,
+            data_dir=PREP_ASSIGNMENTS_TEST,
+            overwrite_cache=True,
+            max_seq_length=512,
+            model_type="bert",
+            cache_root=cache_root,
+            product=product,
+        )
+
+        # generate logits for all claims-premise pairs
+        logger.info('Run inference')
+        predictions = inference_no_args(
+            data=data,
+            loader=loader,
+            logger=logger,
+            model=model,
+            batch_size=batch_size,
+        )
+        precomputed_similarities = dict(zip(guids, predictions))
+        torch.save(precomputed_similarities, output_path)
+    return output_path
+
+
+def get_query_claim_similarities(
+    sim: Mapping[Tuple[str, int], float],
+    softmax: bool,
+) -> Mapping[Tuple[str, int], float]:
+    """
+    Preprocess query claim similarities.
+
+    :param sim:
+        A mapping from (premise_id, claim_id) to the logits of the similarity model, shape: (2,).
+    :param softmax:
+        Whether to apply softmax or use raw logits.
+
+    :return:
+        A mapping from (premise_id, claim_id) to scalar similarity value.
+    """
+    # ensure consistent order
+    pairs = sorted(sim.keys())
+
+    # create tensor,shape: (num_pairs, 2)
+    sim = torch.stack(
+        tensors=[
+            torch.as_tensor(data=sim[pair], dtype=torch.float32)
+            for pair in pairs
+        ],
+        dim=0,
+    )
+
+    # apply softmax is requested
+    if softmax:
+        sim = sim.softmax(dim=-1)
+
+    # take probability of "similar" class
+    sim = sim[:, 1]
+
+    # one row corresponds to one pair similarity
+    return dict(zip(pairs, sim))
+
+
+def get_premise_representations(
+    sim: Mapping[Tuple[float, int], float],
+    softmax: bool,
+) -> Mapping[str, torch.FloatTensor]:
+    """
+    Construct premise representations as similarity vectors to claims.
+
+    :param sim:
+        The similarities for (premise_id, claim_id) pairs.
+    :param softmax
+        Whether to apply softmax or use raw logits.
+
+    :return:
+        A mapping from premise_id to a vector of similarities, shape: (num_claims,).
+    """
+    # verify that similarities are available for all claim, premise pairs
+    premise_ids, claim_ids = [
+        sorted(set(map(itemgetter(pos), sim.keys())))
+        for pos in (0, 1)
+    ]
+    assert set(sim.keys()) == set(
+        (pid, cid)
+        for pid in premise_ids
+        for cid in claim_ids
+    )
+
+    # convert to tensor, shape: (num_premises, num_claims, 2)
+    sim = torch.stack(
+        tensors=[
+            torch.stack(
+                tensors=[
+                    torch.as_tensor(data=sim[premise_id, claim_id], dtype=torch.float32)
+                    for claim_id in claim_ids
+                ],
+                dim=0,
+            )
+            for premise_id in premise_ids
+        ],
+        dim=0,
+    )
+    assert sim.shape == (len(premise_ids), len(claim_ids), 2)
+
+    # apply softmax is requested
+    if softmax:
+        sim = sim.softmax(dim=-1)
+
+    # take probability of "similar" class
+    sim = sim[:, :, 1]
+
+    # one row corresponds to one premise representation
+    return dict(zip(premise_ids, sim))
 
 
 class LearnedSimilarityKNN(RankingMethod):
@@ -361,13 +504,14 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             logger.info('Load data')
             loader, data, model, guids = load_bert_model_and_data_no_args(
                 model_path=model_path,
-                task_name="SIM",
-                batch_size=batch_size,
-                data_dir=PREP_ASSIGNMENTS_TEST,
-                overwrite_cache=True,
-                max_seq_length=512,
-                model_type="bert",
+                product=False,
+            )),
+            softmax=softmax,
+        )
+        self.premise_representations = get_premise_representations(
+            sim=torch.load(_prepare_claim_similarities(
                 cache_root=cache_root,
+                model_path=model_path,
                 product=True,
             )
 
