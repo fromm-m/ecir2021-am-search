@@ -8,6 +8,7 @@ from typing import Mapping, Optional, Sequence, Tuple
 from pathlib import Path
 import torch
 from sklearn.cluster import KMeans
+import torch.tensor as tens
 
 from arclus.models.base import RankingMethod
 from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, \
@@ -367,7 +368,7 @@ class LearnedSimilarityKNN(RankingMethod):
         self.precomputed_similarities = torch.load(buffer_path_sim)
         self.precomputed_states = torch.load(buffer_path_states)
         if softmax:
-            self.precomputed_similarities = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)[1] for k, v in
+            self.precomputed_similarities = {k: torch.softmax(torch.FloatTensor(v, dtype=float), dim=-1)[1] for k, v in
                                              self.precomputed_similarities.items()}
         else:
             self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
@@ -534,9 +535,9 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         self.precomputed_similarities = torch.load(buffer_path)
         self.precomputed_similarities_resultclaims = torch.load(buffer_path_product)
         if softmax:
-            self.precomputed_similarities = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1) for k, v in
+            self.precomputed_similarities = {k: torch.softmax(torch.FloatTensor(v, dtype=float), dim=-1) for k, v in
                                              self.precomputed_similarities.items()}
-            self.precomputed_similarities_resultclaims = {k: torch.softmax(torch.tensor(v, dtype=float), dim=-1)
+            self.precomputed_similarities_resultclaims = {k: torch.softmax(torch.FloatTensor(v, dtype=float), dim=-1)
                                                           for k, v in
                                                           self.precomputed_similarities_resultclaims.items()}
 
@@ -568,7 +569,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         # get premise representations, as similarity vector to all claims
-        premise_repr = torch.stack([torch.tensor([v for k, v in self.precomputed_similarities_resultclaims.items()
+        premise_repr = torch.stack([torch.FloatTensor([v for k, v in self.precomputed_similarities_resultclaims.items()
                                                   if k[0] == premise_id]) for premise_id in premise_ids], dim=0)
 
         return _premise_cluster_filtered(
