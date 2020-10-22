@@ -66,9 +66,10 @@ def inference_no_args(
     model.eval()
     for batch in tqdm(loader, desc="Inference"):
         batch = tuple(t.to(device) for t in batch)
-        logits, state = model.forward(input_ids=batch[0], attention_mask=batch[1], token_type_ids=batch[2], output_hidden_states=True)
+        logits, state = model.forward(input_ids=batch[0], attention_mask=batch[1], token_type_ids=batch[2],
+                                      output_hidden_states=True)
         predictions.extend(logits.cpu())
-        states.extend(state[-1][:,0,:].cpu())
+        states.extend(state[-1][:, 0, :].cpu())
     return predictions, states
 
 
@@ -111,11 +112,11 @@ def load_and_cache_examples(
     cached_features_file = os.path.join(cache_root, "cached_{}_{}_{}".format("inference", list(
         filter(None, model_path.split("/"))).pop(), str(task), ), )
 
-    #if os.path.exists(cached_features_file) and not overwrite_cache:
+    # if os.path.exists(cached_features_file) and not overwrite_cache:
     #    logger.info("Loading features from cached file %s", cached_features_file)
     #    features = torch.load(cached_features_file)
     #    examples = None
-    #else:
+    # else:
     logger.info("Creating features from dataset file at %s", data_dir)
     label_list = processor.get_labels()
     examples = processor.get_examples(data_dir=data_dir, product=product)
@@ -254,7 +255,7 @@ def convert_examples_to_features(
             logger.info(
                 "token_type_ids: %s" % " ".join([str(x) for x in token_type_ids])
             )
-        #            logger.info("label: %s (id = %d)" % (example.label, label))
+        # logger.info("label: %s (id = %d)" % (example.label, label))
         features.append(
             InputFeatures(
                 input_ids=input_ids,
