@@ -10,6 +10,9 @@ import tqdm
 from arclus.evaluation import evaluate_ranking_method
 from arclus.models import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
+from arclus.settings import DATA_ROOT
+
+logging.basicConfig(level=logging.ERROR)
 
 
 def main():
@@ -19,53 +22,62 @@ def main():
     parser.add_argument('--k', default=[5, 10], type=int)
     parser.add_argument('--force', action='store_true', default=False)
     args = parser.parse_args()
+    similarities = DATA_ROOT / 'similarities'
+    model_path = '/nfs/data3/fromm/argument_clustering/models/c26817b78afc4e95ab86793d7390081b'
     configs = [
-        # 0. Related Work: Dumani
-        dict(
-            name='dumani',
-            column=column,
-        )
-        for column in ('first512Tokens', 'slidingWindow', 'sentences')
-    ] + [
-        # 1. zero_shot_knn
-        dict(
-            name='zero_shot_knn',
-            similarity=similarity,
-        )
-        for similarity in ('l2', 'l1', 'cos')
-    ] + [
-        # 2. zero_shot_cluster_knn
-        dict(
-            name='zero_shot_cluster_knn',
-            cluster_ratio=cluster_ratio,
-            cluster_representative=cluster_representative,
-            similarity=similarity,
-        )
-        for cluster_ratio in (0.25, 0.5, 1.0, None)
-        for cluster_representative in ('closest-to-center', 'closest-to-claim')
-        for similarity in ('l2', 'l1', 'cos')
-    ] + [
-        # 3. learned_similarity_knn
-        dict(
-            name='learned_similarity_knn',
-            softmax=softmax
-        )
-        for softmax in (False, True)
-    ] + [
-        # 4. learned_similarity_cluster_knn
-        dict(
-            name='learned_similarity_cluster_knn',
-            softmax=softmax,
-            cluster_ratio=cluster_ratio,
-        )
-        for softmax in (False, True)
-        for cluster_ratio in (0.25, 0.5, 1.0, None)
-    ] + [
+         # 0. Related Work: Dumani
+         dict(
+             name='dumani',
+             column=column,
+         )
+         for column in ('first512Tokens', 'slidingWindow', 'sentences')
+     ] + [
+         # 1. zero_shot_knn
+         dict(
+             name='zero_shot_knn',
+             similarity=similarity,
+         )
+         for similarity in ('l2', 'l1', 'cos')
+     ] + [
+         # 2. zero_shot_cluster_knn
+         dict(
+             name='zero_shot_cluster_knn',
+             cluster_ratio=cluster_ratio,
+             cluster_representative=cluster_representative,
+             similarity=similarity,
+         )
+         for cluster_ratio in (0.25, 0.5, 1.0, None)
+         for cluster_representative in ('closest-to-center', 'closest-to-claim')
+         for similarity in ('l2', 'l1', 'cos')
+     ] + [
+         # 3. learned_similarity_knn
+         dict(
+             name='learned_similarity_knn',
+             softmax=softmax,
+             similarities_dir=similarities,
+             model_path=model_path
+         )
+         for softmax in (False, True)
+     ] + [
+         # 4. learned_similarity_cluster_knn
+         dict(
+             name='learned_similarity_cluster_knn',
+             softmax=softmax,
+             cluster_ratio=cluster_ratio,
+             similarities_dir=similarities,
+             model_path=model_path
+
+         )
+         for softmax in (False, True)
+         for cluster_ratio in (0.25, 0.5, 1.0, None)
+     ] + [
         # 5. learned_similarity_cluster_knn
         dict(
             name='learned_similarity_matrix_cluster_knn',
             softmax=softmax,
             cluster_ratio=cluster_ratio,
+            similarities_dir=similarities,
+            model_path=model_path
         )
         for softmax in (False, True)
         for cluster_ratio in (0.25, 0.5, 1.0, None)

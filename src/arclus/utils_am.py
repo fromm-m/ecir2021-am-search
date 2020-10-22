@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from tqdm import tqdm
 from transformers import BertForSequenceClassification, BertTokenizer
 from transformers.data.processors import DataProcessor, InputExample, InputFeatures
+from transformers.tokenization_utils_base import TruncationStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def inference_no_args(
 ) -> List[float]:
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     predictions = []
+    states = []
     logger.info("***** Running inference {} *****".format(""))
     logger.info("  Num examples = %d", len(data))
     logger.info("  Batch size = %d", batch_size)
@@ -64,14 +66,11 @@ def inference_no_args(
     model.eval()
     for batch in tqdm(loader, desc="Inference"):
         batch = tuple(t.to(device) for t in batch)
-        inputs = {'input_ids': batch[0],
-                  'attention_mask': batch[1],
-                  'token_type_ids': batch[2], }
-        # logits = outputs[0].cpu().numpy()[:, 1]
-        outputs = model(**inputs)
-        logits = outputs[0]
-        predictions.extend(logits.tolist())
-    return predictions
+        logits, state = model.forward(input_ids=batch[0], attention_mask=batch[1], token_type_ids=batch[2],
+                                      output_hidden_states=True)
+        predictions.extend(logits.cpu())
+        states.extend(state[-1][:, 0, :].cpu())
+    return predictions, states
 
 
 @torch.no_grad()
@@ -113,28 +112,28 @@ def load_and_cache_examples(
     cached_features_file = os.path.join(cache_root, "cached_{}_{}_{}".format("inference", list(
         filter(None, model_path.split("/"))).pop(), str(task), ), )
 
-    if os.path.exists(cached_features_file) and not overwrite_cache:
-        logger.info("Loading features from cached file %s", cached_features_file)
-        features = torch.load(cached_features_file)
-        examples = None
-    else:
-        logger.info("Creating features from dataset file at %s", data_dir)
-        label_list = processor.get_labels()
-        examples = processor.get_examples(data_dir=data_dir, product=product)
-        log_param("  Num examples training", len(examples))
+    # if os.path.exists(cached_features_file) and not overwrite_cache:
+    #    logger.info("Loading features from cached file %s", cached_features_file)
+    #    features = torch.load(cached_features_file)
+    #    examples = None
+    # else:
+    logger.info("Creating features from dataset file at %s", data_dir)
+    label_list = processor.get_labels()
+    examples = processor.get_examples(data_dir=data_dir, product=product)
+    log_param("  Num examples training", len(examples))
 
-        features = convert_examples_to_features(
-            examples,
-            tokenizer,
-            label_list=label_list,
-            max_length=max_seq_length,
-            output_mode=output_mode,
-            pad_on_left=bool(model_type in ["xlnet"]),
-            pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-            pad_token_segment_id=4 if model_type in ["xlnet"] else 0,
-        )
-        logger.info("Saving features into cached file %s", cached_features_file)
-        torch.save(features, cached_features_file)
+    features = convert_examples_to_features(
+        examples,
+        tokenizer,
+        label_list=label_list,
+        max_length=max_seq_length,
+        output_mode=output_mode,
+        pad_on_left=bool(model_type in ["xlnet"]),
+        pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+        pad_token_segment_id=4 if model_type in ["xlnet"] else 0,
+    )
+    logger.info("Saving features into cached file %s", cached_features_file)
+    torch.save(features, cached_features_file)
 
     # Convert to Tensors and build dataset
     all_input_ids = torch.as_tensor([f.input_ids for f in features], dtype=torch.long)
@@ -210,6 +209,7 @@ def convert_examples_to_features(
             example.text_b,
             add_special_tokens=True,
             max_length=max_length,
+            truncation=TruncationStrategy.ONLY_FIRST
         )
         input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
 
@@ -255,7 +255,7 @@ def convert_examples_to_features(
             logger.info(
                 "token_type_ids: %s" % " ".join([str(x) for x in token_type_ids])
             )
-        #            logger.info("label: %s (id = %d)" % (example.label, label))
+        # logger.info("label: %s (id = %d)" % (example.label, label))
         features.append(
             InputFeatures(
                 input_ids=input_ids,
@@ -308,8 +308,8 @@ class SimilarityProcessor(DataProcessor):
     def _create_product_examples(df):
         """Creates examples for the training and test sets."""
         examples = []
-        claim_ids = df.claim_id.to_list()
-        claim_text = df.claim_text.to_list()
+        claim_ids = df.resultClaimID.to_list()
+        claim_text = df.resultClaim.to_list()
         claim_mapping = dict(zip(claim_ids, claim_text))
         premise_ids = df.premise_id.to_list()
         premise_text = df.premise_text.to_list()

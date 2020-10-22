@@ -107,6 +107,7 @@ def mndcg_score(
     :return:
         The modified NDCG score, a scalar between 0 and 1 (both incl.).
     """
+    assert len(y_pred) == len(set(y_pred))
     opt_score = optimal_mdcg_score(data=data, k=k)
     if opt_score <= 0:
         return 0.
