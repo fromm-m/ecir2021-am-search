@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, SequentialSampler, TensorDataset
 from tqdm import tqdm
 from transformers import BertForSequenceClassification, BertTokenizer
 from transformers.data.processors import DataProcessor, InputExample, InputFeatures
+from transformers.tokenization_utils_base import TruncationStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -110,28 +111,28 @@ def load_and_cache_examples(
     cached_features_file = os.path.join(cache_root, "cached_{}_{}_{}".format("inference", list(
         filter(None, model_path.split("/"))).pop(), str(task), ), )
 
-    if os.path.exists(cached_features_file) and not overwrite_cache:
-        logger.info("Loading features from cached file %s", cached_features_file)
-        features = torch.load(cached_features_file)
-        examples = None
-    else:
-        logger.info("Creating features from dataset file at %s", data_dir)
-        label_list = processor.get_labels()
-        examples = processor.get_examples(data_dir=data_dir, product=product)
-        log_param("  Num examples training", len(examples))
+    #if os.path.exists(cached_features_file) and not overwrite_cache:
+    #    logger.info("Loading features from cached file %s", cached_features_file)
+    #    features = torch.load(cached_features_file)
+    #    examples = None
+    #else:
+    logger.info("Creating features from dataset file at %s", data_dir)
+    label_list = processor.get_labels()
+    examples = processor.get_examples(data_dir=data_dir, product=product)
+    log_param("  Num examples training", len(examples))
 
-        features = convert_examples_to_features(
-            examples,
-            tokenizer,
-            label_list=label_list,
-            max_length=max_seq_length,
-            output_mode=output_mode,
-            pad_on_left=bool(model_type in ["xlnet"]),
-            pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
-            pad_token_segment_id=4 if model_type in ["xlnet"] else 0,
-        )
-        logger.info("Saving features into cached file %s", cached_features_file)
-        torch.save(features, cached_features_file)
+    features = convert_examples_to_features(
+        examples,
+        tokenizer,
+        label_list=label_list,
+        max_length=max_seq_length,
+        output_mode=output_mode,
+        pad_on_left=bool(model_type in ["xlnet"]),
+        pad_token=tokenizer.convert_tokens_to_ids([tokenizer.pad_token])[0],
+        pad_token_segment_id=4 if model_type in ["xlnet"] else 0,
+    )
+    logger.info("Saving features into cached file %s", cached_features_file)
+    torch.save(features, cached_features_file)
 
     # Convert to Tensors and build dataset
     all_input_ids = torch.as_tensor([f.input_ids for f in features], dtype=torch.long)
@@ -207,7 +208,7 @@ def convert_examples_to_features(
             example.text_b,
             add_special_tokens=True,
             max_length=max_length,
-            truncation_strategy="longest_first"
+            truncation=TruncationStrategy.ONLY_FIRST
         )
         input_ids, token_type_ids = inputs["input_ids"], inputs["token_type_ids"]
 

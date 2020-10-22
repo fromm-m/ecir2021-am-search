@@ -11,11 +11,11 @@ from arclus.evaluation import evaluate_ranking_method
 from arclus.models import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
 from arclus.settings import DATA_ROOT
+
 logging.basicConfig(level=logging.ERROR)
 
 
 def main():
-
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_root', default='results', type=str)
@@ -23,7 +23,7 @@ def main():
     parser.add_argument('--force', action='store_true', default=False)
     args = parser.parse_args()
     similarities = DATA_ROOT / 'similarities'
-    model_path = '/nfs/data3/fromm/argument_clustering/models/c23f9dd98bc24f17bf430fb7c3db0e39'
+    model_path = '/nfs/data3/fromm/argument_clustering/models/c26817b78afc4e95ab86793d7390081b'
     configs = [
          # 0. Related Work: Dumani
          dict(

@@ -4,8 +4,8 @@ import logging
 
 import pandas
 
-from arclus.settings import (CLAIMS_LENGTH, CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES_ENERGY,
-                             PREP_ASSIGNMENTS, PREP_CLAIMS, PREP_CLAIMS_TEST, PREP_PREMISES_ENERGY, PREP_PREMISES_TEST,
+from arclus.settings import (CLAIMS_LENGTH, CLAIMS_TEST_FEATURES, PREMISES_FEATURES,
+                             PREP_ASSIGNMENTS, PREP_CLAIMS, PREP_CLAIMS_TEST, PREP_PREMISES_ENERGY, PREP_PREMISES,
                              PREMISES_LENGTH)
 from arclus.text_encoding import encode_and_save_texts
 from arclus.utils import concat_premise_claims
@@ -38,10 +38,10 @@ def main():
         keys = df['claim_id']
         output_path = CLAIMS_TEST_FEATURES
     elif args.mode == 'premises':
-        df = pandas.read_csv(PREP_PREMISES_ENERGY)
+        df = pandas.read_csv(PREP_PREMISES)
         texts = df['premise_text']
         keys = df['premise_id']
-        output_path = PREMISES_TEST_FEATURES_ENERGY
+        output_path = PREMISES_FEATURES
     else:
         raise ValueError(f'Invalid mode={args.mode}')
 

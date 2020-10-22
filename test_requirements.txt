@@ -1,8 +1,0 @@
-# code style
-flake8>=3.8.2
-# static code analysis
-pylint>=2.5.2
-# unittest
-pytest>=5.4.2
-pytest-cov>=2.9.0
-pytest-parallel>=0.1.0

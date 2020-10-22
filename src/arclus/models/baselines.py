@@ -185,8 +185,8 @@ class LearnedSimilarityKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        buffer_path_sim = similarities_dir + PREP_TEST_SIMILARITIES
-        buffer_path_states = similarities_dir + PREP_TEST_STATES
+        buffer_path_sim = similarities_dir / PREP_TEST_SIMILARITIES
+        buffer_path_states = similarities_dir / PREP_TEST_STATES
         logger.info(f'Using softmax: {softmax}')
         if not buffer_path_sim.is_file() or not buffer_path_states.is_file():
             logger.info('computing similarities')
@@ -351,8 +351,8 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        buffer_path = similarities_dir + PREP_TEST_SIMILARITIES
-        buffer_path_product = similarities_dir + PREP_TEST_PRODUCT_SIMILARITIES
+        buffer_path = similarities_dir / PREP_TEST_SIMILARITIES
+        buffer_path_product = similarities_dir / PREP_TEST_PRODUCT_SIMILARITIES
         logger.info(f'Using softmax: {softmax}')
         if not buffer_path_product.is_file():
             logger.info('computing similarities')

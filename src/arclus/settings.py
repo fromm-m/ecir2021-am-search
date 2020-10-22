@@ -40,7 +40,8 @@ OUTPUT_FEATURES_POSITIVES = DATA_ROOT / 'features' / 'embeddings_positives.npy'
 OUTPUT_FEATURES_NEGATIVE = DATA_ROOT / 'features' / 'embeddings_negatives.npy'
 CLAIMS_TEST_FEATURES = DATA_ROOT / 'features' / 'claims_test_embeddings.pt'
 PREMISES_TEST_FEATURES = DATA_ROOT / 'features' / 'premises_test_embeddings.pt'
-PREMISES_TEST_FEATURES_ENERGY = DATA_ROOT / 'features' / 'premises_test_embeddings_energy.pt'
+PREMISES_FEATURES = DATA_ROOT / 'features' / 'premises_embeddings.pt'
+PREMISES_FEATURES_ENERGY = DATA_ROOT / 'features' / 'premises_embeddings_energy.pt'
 # Negative Sampling
 NEGATIVE_SAMPLES = DATA_ROOT / 'preprocessed' / 'negatives.csv'
 # one negative per positive
