@@ -140,15 +140,22 @@ def evaluate_ranking_method(
     df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth"]]
     # iterate over all claims
     result_data = []
-    for claim_id, queries in tqdm(df.groupby(by="claim_id"), unit='claim'):
+    for query_claim_id, queries in tqdm(df.groupby(by="claim_id"), unit='claim'):
+        # use other data for chosing parameters (=leave-one-out cross validation)
+        training_data = df[df["claim_id"] != query_claim_id]
         for kk in k:
+            # optimize parameters
+            method.fit(
+                training_data=training_data,
+                k=kk,
+            )
             # predict ranking
             predicted_ranking = method.rank(
-                claim_id=claim_id,
+                claim_id=query_claim_id,
                 premise_ids=queries["premise_id"].to_numpy(dtype=str),
                 k=kk,
             )
             # evaluate ranking
             score = mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)
-            result_data.append((claim_id, kk, score))
+            result_data.append((query_claim_id, kk, score))
     return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
