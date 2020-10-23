@@ -496,14 +496,16 @@ def core_set(
 
     result = [first_id]
 
-    chosen_mask = torch.zeros(n, dtype=torch.bool)
+    chosen_mask = torch.zeros(n, dtype=torch.bool, device=similarity.device)
     chosen_mask[first_id] = True
 
     for i in range(1, k):
         # select similarity from candidates to chosen, shape: (num_cand, num_chosen)
         score = similarity[chosen_mask].t()[~chosen_mask]
         # largest similarity to chosen, shape: (num_cand), smallest similarity
-        next_id = score.max(dim=-1).values.argmin().item()
+        local_next_id = score.max(dim=-1).values.argmin()
+        # convert to global id
+        next_id = torch.arange(n, device=similarity.device)[~chosen_mask][local_next_id].item()
 
         # update mask
         chosen_mask[next_id] = True
