@@ -3,13 +3,13 @@ import random
 import string
 import tempfile
 import unittest
-from typing import Any, List, Mapping, MutableMapping, Optional, Type
+from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Type
 
 import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, get_premise_representations, get_query_claim_similarities
+from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
 from arclus.similarity import LpSimilarity
 
 
@@ -159,3 +159,19 @@ def test_get_premise_representations():
             assert v.shape == (num_claims,)
             if softmax:
                 assert (v >= 0).all() and (v <= 1).all()
+
+
+class CoreSetUtilityTests(unittest.TestCase):
+    """Tests for core_set method."""
+
+    def test_randomized(self):
+        """Randomized test."""
+        n = 10
+        similarity = torch.rand(n, n)
+        first_id = random.randrange(n)
+        k = 3
+        result = core_set(similarity=similarity, first_id=first_id, k=k)
+        assert isinstance(result, Sequence)
+        assert len(result) == k
+        assert len(set(result)) == len(result)
+        assert all(0 <= i < n for i in result)

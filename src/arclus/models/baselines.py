@@ -503,7 +503,7 @@ def core_set(
         # select similarity from candidates to chosen, shape: (num_cand, num_chosen)
         score = similarity[chosen_mask].t()[~chosen_mask]
         # largest similarity to chosen, shape: (num_cand), smallest similarity
-        next_id = score.max(dim=-1).argmin().item()
+        next_id = score.max(dim=-1).values.argmin().item()
 
         # update mask
         chosen_mask[next_id] = True
