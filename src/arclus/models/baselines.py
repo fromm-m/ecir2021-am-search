@@ -16,7 +16,7 @@ from arclus.settings import (
     CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST,
     PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES,
 )
-from arclus.similarity import Similarity
+from arclus.similarity import CosineSimilarity, Similarity
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
 
 logger: Logger = logging.getLogger(__name__)
@@ -520,23 +520,22 @@ class Coreset(LearnedSimilarityKNN):
 
     def __init__(
         self,
-        relevance_threshold: float,
         model_path: str,
         similarities_dir: str,
+        premise_premise_similarity: Similarity = CosineSimilarity(),
         cache_root: str = '/nfs/data3/obermeier/arclus/temp/',
     ):
         """
         Initialize the method.
 
-        :param relevance_threshold: <0
-            The relative number of clusters to use. If None, use k.
         :param model_path:
             Directory where the fine-tuned bert similarity model checkpoint is located.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
         super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
-        self.threshold = relevance_threshold
+        self.threshold = None
+        self.premise_premise_similarity = premise_premise_similarity
 
     def fit(
         self,
@@ -546,45 +545,41 @@ class Coreset(LearnedSimilarityKNN):
         raise NotImplementedError
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        if self.threshold is None:
+            raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
+
         def lookup_similarity(premise_id: str) -> float:
-            # get similarity between a premise and query claim
+            """Get similarity between a premise and query claim."""
             return self.precomputed_similarities[premise_id, claim_id]
 
-        def filter_threshold(premise_id):
-            if lookup_similarity(premise_id) > self.threshold:
-                return True
-            else:
-                return False
+        # filter premise IDs
+        premise_ids = [
+            premise_id
+            for premise_id in premise_ids
+            if lookup_similarity(premise_id=premise_id) > self.threshold
+        ]
 
-        result = []
-        premise_ids_above_threshold = list(filter(filter_threshold, premise_ids))
+        # select first premise as closest to claim
+        first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
 
-        if len(premise_ids_above_threshold) <= k:
-            result = sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
-        else:
-            max_p = sorted(premise_ids_above_threshold, key=lookup_similarity, reverse=True)[0]  # id of most relevant
-            result.append(max_p)  # append id to result
-            premise_ids_above_threshold.remove(max_p)  # remove id from list of relevant
-            premise_repr = torch.stack(
-                [self.precomputed_states[p_id, claim_id] for p_id in premise_ids_above_threshold],
-                dim=0)  # not seen premise representations
-            premise_repr_selected = torch.stack([self.precomputed_states[p_id, claim_id] for p_id in result],
-                                                dim=0)  # the selected representations
-            for _ in range(k):
-                prepared_p_repr_sel = premise_repr_selected.reshape(len(premise_repr_selected), -1)
-                prepared_p_repr = premise_repr.reshape(len(premise_repr), -1)
-                # hyperparameter cosine? l1 / l2?
-                distances = torch.cdist(prepared_p_repr_sel,
-                                        prepared_p_repr)  # result shape: n_specified, 1; others shape: n_others, 1
-                sum_distances = torch.min(distances, dim=0)  # sum of dist of others to current selected
-                max_dist_id = int(torch.argmax(sum_distances))
-                next_id = premise_ids_above_threshold[max_dist_id]
-                result.append(next_id)
-                premise_ids_above_threshold.remove(next_id)
-                premise_repr_selected = torch.cat([premise_repr_selected, premise_repr[max_dist_id].unsqueeze(0)])
-                premise_repr = torch.cat([premise_repr[0:max_dist_id], premise_repr[max_dist_id + 1:]])
+        # get premise representations
+        premise_repr = torch.stack(
+            [
+                self.precomputed_states[p_id, claim_id]
+                for p_id in premise_ids
+                if lookup_similarity(premise_id=p_id) > self.threshold
+            ],
+            dim=0,
+        )
 
-        return result
+        # compute pair-wise similarity matrix
+        similarity = self.premise_premise_similarity.sim(premise_repr, premise_repr)
+
+        # apply coreset
+        local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
+
+        # convert back to premise_ids
+        return [premise_ids[i] for i in local_ids]
 
 
 class LearnedSimilarityMatrixClusterKNN(RankingMethod):
