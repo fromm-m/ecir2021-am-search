@@ -6,7 +6,7 @@ from collections import defaultdict
 from logging import Logger
 from operator import itemgetter
 from pathlib import Path
-from typing import Mapping, Optional, Sequence, Tuple
+from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import numpy
 import pandas
@@ -381,20 +381,27 @@ class LearnedSimilarityKNN(RankingMethod):
         else:
             self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
 
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        def lookup_similarity(premise_id: str) -> float:
-            return self.precomputed_similarities[premise_id, claim_id]
+    def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
+        """Create a similarity lookup for premises, with a fixed claim."""
 
-        return sorted(premise_ids, key=lookup_similarity, reverse=True)[:k]
+        def lookup_similarity(premise_id: str) -> float:
+            """Get similarity between a premise and query claim."""
+            return self.precomputed_similarities[premise_id, for_claim_id]
+
+        return lookup_similarity
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        return sorted(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id), reverse=True)[:k]
 
 
 def _premise_cluster_filtered(
     claim_id: int,
     premise_ids: Sequence[str],
     premise_repr: torch.FloatTensor,
-    similarities: Mapping[Tuple[str, int], float],
     k: int,
     ratio: Optional[float],
+    similarities: Optional[Mapping[Tuple[str, int], float]] = None,
+    similarity_lookup: Callable[[str], float] = None,
 ) -> Sequence[str]:
     """
     Return premises sorted by similarity to claim, filtered to contain at most one element per cluster.
@@ -420,13 +427,16 @@ def _premise_cluster_filtered(
     algorithm = KMeans(n_clusters=_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
     cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
 
-    def lookup_similarity(premise_id: str) -> float:
-        return similarities[premise_id, claim_id]
+    if similarity_lookup is None:
+        def lookup_similarity(premise_id: str) -> float:
+            return similarities[premise_id, claim_id]
+
+        similarity_lookup = lookup_similarity
 
     seen_clusters = set()
     result = []
     mapping = dict(zip(premise_ids, cluster_assignment))
-    for premise_id in sorted(premise_ids, key=lookup_similarity, reverse=True):
+    for premise_id in sorted(premise_ids, key=similarity_lookup, reverse=True):
         cluster_id = mapping[premise_id]
         if cluster_id not in seen_clusters:
             result.append(premise_id)
@@ -475,9 +485,9 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
             claim_id=claim_id,
             premise_ids=premise_ids,
             premise_repr=premise_repr,
-            similarities=self.precomputed_similarities,
             k=k,
             ratio=self.ratio,
+            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
         )
 
 
@@ -560,6 +570,40 @@ class BaseCoreSetRanking(LearnedSimilarityKNN):
         self.premise_premise_similarity = premise_premise_similarity
         self.debug = debug
 
+    def _get_pairwise_similarity_and_first_premise(
+        self,
+        claim_id,
+        premise_ids,
+    ) -> Tuple[int, torch.FloatTensor]:
+        """
+        Get pairwise premise similarities and select first premise by premise-claim similarity.
+
+        :param claim_id:
+            The claim ID.
+        :param premise_ids:
+            The premise IDs.
+
+        :return:
+            The first premise ID (as local ID, i.e. 0 <= local_premise_id < num_premises), and a
+            (num_premises, num_premises) similarity matrix.
+        """
+        # select first premise as closest to claim
+        first_id = premise_ids.index(max(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id)))
+
+        # get premise representations
+        premise_repr = torch.stack(
+            [
+                self.precomputed_states[p_id, claim_id]
+                for p_id in premise_ids
+            ],
+            dim=0,
+        )
+
+        # compute pair-wise similarity matrix
+        similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
+
+        return first_id, similarity
+
 
 class Coreset(BaseCoreSetRanking):
 
@@ -568,7 +612,7 @@ class Coreset(BaseCoreSetRanking):
         model_path: str,
         similarities_dir: str,
         premise_premise_similarity: Similarity = CosineSimilarity(),
-        cache_root: str = '/nfs/data3/obermeier/arclus/temp/',
+        cache_root: Optional[str] = None,
         debug: bool = False,
         fill_to_k: bool = False,
     ):
@@ -670,31 +714,18 @@ class Coreset(BaseCoreSetRanking):
         return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=self.threshold, fill_to_k=self.fill_to_k)
 
     def _rank(self, claim_id, premise_ids, k, threshold: float, fill_to_k: bool) -> Sequence[str]:
-        def lookup_similarity(premise_id: str) -> float:
-            """Get similarity between a premise and query claim."""
-            return self.precomputed_similarities[premise_id, claim_id]
-
         # filter premise IDs
         premise_ids = [
             premise_id
             for premise_id in premise_ids
-            if lookup_similarity(premise_id=premise_id) > threshold
+            if self.precomputed_similarities[premise_id, claim_id] > threshold
         ]
 
         if len(premise_ids) > 0:
-            # select first premise as closest to claim
-            first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
-            # get premise representations
-            premise_repr = torch.stack(
-                [
-                    self.precomputed_states[p_id, claim_id]
-                    for p_id in premise_ids
-                ],
-                dim=0,
+            first_id, similarity = self._get_pairwise_similarity_and_first_premise(
+                claim_id=claim_id,
+                premise_ids=premise_ids,
             )
-
-            # compute pair-wise similarity matrix
-            similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
 
             # apply coreset
             local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
@@ -708,7 +739,7 @@ class Coreset(BaseCoreSetRanking):
         if fill_to_k and len(chosen) < k:
             chosen += sorted(
                 set(premise_ids).difference(chosen),
-                key=lookup_similarity,
+                key=self.similarity_lookup(for_claim_id=claim_id),
                 reverse=True,
             )[:k - len(chosen)]
 
@@ -778,32 +809,16 @@ class BiasedCoreset(BaseCoreSetRanking):
     def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float) -> Sequence[str]:
         premise_ids = list(premise_ids)
 
-        def lookup_similarity(premise_id: str) -> float:
-            """Get similarity between a premise and query claim."""
-            return self.precomputed_similarities[premise_id, claim_id]
-
-        # select first premise as closest to claim
-        first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
-
-        # get premise representations
-        premise_repr = torch.stack(
-            [
-                self.precomputed_states[p_id, claim_id]
-                for p_id in premise_ids
-            ],
-            dim=0,
+        # select first premise as closest to claim and get pairwise premise similarities
+        first_id, premise_premise_similarity = self._get_pairwise_similarity_and_first_premise(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
         )
 
         claim_premise_similarity = torch.as_tensor(
-            data=[
-                lookup_similarity(premise_id=premise_id)
-                for premise_id in premise_ids
-            ],
+            data=list(map(self.similarity_lookup(for_claim_id=claim_id), premise_ids)),
             dtype=torch.float32,
         )
-
-        # compute pair-wise similarity matrix
-        premise_premise_similarity = self.premise_premise_similarity.sim(premise_repr, premise_repr)
 
         # apply coreset
         local_ids = core_set(
