@@ -107,6 +107,7 @@ def main():
                       similarities_dir=similarities,
                       model_path=model_path,
                       debug=True,
+                      resolution=50,
                   )
                   for similarity in ('l2', 'l1', 'cos')
               ]
@@ -137,27 +138,27 @@ def main():
         if output_path.is_file() and not args.force:
             continue
 
-        mlflow.start_run()
-        log_config = copy.deepcopy(config)
-        log_config["k"] = args.k
-        mlflow.log_params(params=flatten_dict(log_config))
+        with mlflow.start_run():
+            log_config = copy.deepcopy(config)
+            log_config["k"] = args.k
+            mlflow.log_params(params=flatten_dict(log_config))
 
-        # Instantiate similarity if necessary
-        real_config = config.copy()
-        for key in ("similarity", "premise_premise_similarity"):
-            if key in config.keys():
-                real_config[key] = get_similarity_by_name(name=config[key])
+            # Instantiate similarity if necessary
+            real_config = config.copy()
+            for key in ("similarity", "premise_premise_similarity"):
+                if key in config.keys():
+                    real_config[key] = get_similarity_by_name(name=config[key])
 
-        # Instantiate method
-        method = get_baseline_method_by_name(**real_config)
+            # Instantiate method
+            method = get_baseline_method_by_name(**real_config)
 
-        # Evaluate method
-        result_df = evaluate_ranking_method(method=method, k=args.k)
-        agg = result_df.groupby(by="k").agg(dict(mnDCG="mean"))
-        mlflow.log_metrics(metrics={
-            f"mnDCG@{k}": mndcg
-            for k, mndcg in zip(agg.index.tolist(), map(itemgetter(0), agg.values.tolist()))
-        })
+            # Evaluate method
+            result_df = evaluate_ranking_method(method=method, k=args.k)
+            agg = result_df.groupby(by="k").agg(dict(mnDCG="mean"))
+            mlflow.log_metrics(metrics={
+                f"mnDCG_at_{k}": mndcg
+                for k, mndcg in zip(agg.index.tolist(), map(itemgetter(0), agg.values.tolist()))
+            })
 
         # Add configuration
         for key, value in config.items():
@@ -165,7 +166,6 @@ def main():
 
         # Save result
         result_df.to_csv(output_path, index=False, sep='\t')
-        mlflow.end_run()
 
     # Collate results
     files = list(output_root.glob('*.tsv'))
