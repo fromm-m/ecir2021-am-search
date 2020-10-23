@@ -378,6 +378,34 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         return [premise_ids[i] for i in top_ids]
 
 
+def get_premise_representations_for_claim(
+    claim_id: int,
+    premise_ids: Sequence[str],
+    source: Mapping[Tuple[str, int], torch.FloatTensor],
+) -> torch.FloatTensor:
+    """
+    Lookup premise representations from a dictionary of precomputed representations.
+
+    :param claim_id:
+        The claim ID.
+    :param premise_ids:
+        The premise IDs.
+    :param source:
+        The precomputed representations, all vectors of same shape.
+
+    :return: shape: (num_premises, dim)
+        A tensor of premise representations.
+    """
+    """Get premise representations."""
+    return torch.stack(
+        [
+            source[premise_id, claim_id]
+            for premise_id in premise_ids
+        ],
+        dim=0,
+    )
+
+
 class LearnedSimilarityBasedMethod(RankingMethod, ABC):
     """Base class for ranking methods based on learned similarity between claims and premises."""
 
@@ -415,15 +443,6 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
             product=False,
             with_states=with_states,
         )
-
-    def _get_premise_representations(self, claim_id: int, premise_ids: Sequence[str]) -> torch.FloatTensor:
-        """Get premise representations."""
-        return torch.stack(
-            [
-                self.precomputed_states[premise_id, claim_id]
-                for premise_id in premise_ids
-            ],
-            dim=0)
 
     def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
         """Create a similarity lookup for premises, with a fixed claim."""
@@ -478,7 +497,11 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         return _premise_cluster_filtered(
             premise_ids=premise_ids,
-            premise_repr=self._get_premise_representations(claim_id=claim_id, premise_ids=premise_ids),
+            premise_repr=get_premise_representations_for_claim(
+                claim_id=claim_id,
+                premise_ids=premise_ids,
+                source=self.precomputed_states,
+            ),
             k=k,
             ratio=self.ratio,
             similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
@@ -541,7 +564,9 @@ def core_set(
     return result
 
 
-class BaseCoreSetRanking(LearnedSimilarityBasedMethod):
+class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
+    """Base class for core set approaches."""
+
     def __init__(
         self,
         model_path: str,
@@ -555,8 +580,12 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod):
 
         :param model_path:
             Directory where the fine-tuned bert similarity model checkpoint is located.
+        :param premise_premise_similarity:
+            The similarity to use between premise representations.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
+        :param debug:
+            Whether to store fit artifacts for further inspection.
         """
         super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
         if isinstance(premise_premise_similarity, str):
@@ -585,7 +614,11 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod):
         first_id = premise_ids.index(max(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id)))
 
         # get premise representations
-        premise_repr = self._get_premise_representations(claim_id=claim_id, premise_ids=premise_ids)
+        premise_repr = get_premise_representations_for_claim(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
+            source=self.precomputed_states,
+        )
 
         # compute pair-wise similarity matrix
         similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
@@ -594,6 +627,7 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod):
 
 
 class Coreset(BaseCoreSetRanking):
+    """Basic core-set approach with thresholding."""
 
     def __init__(
         self,
@@ -611,6 +645,9 @@ class Coreset(BaseCoreSetRanking):
             Directory where the fine-tuned bert similarity model checkpoint is located.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
+        :param fill_to_k:
+            Whether to fill up with more candidates (according to KNN heuristic), if less than k candidates remain
+            after thresholding.
         """
         super().__init__(
             model_path=model_path,
@@ -862,13 +899,7 @@ class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityBasedMethod):
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         return _premise_cluster_filtered(
             premise_ids=premise_ids,
-            premise_repr=torch.stack(
-                [
-                    self.premise_representations[pid]
-                    for pid in premise_ids
-                ],
-                dim=0,
-            ),
+            premise_repr=torch.stack(list(map, self.premise_representations.get, premise_ids), dim=0),
             k=k,
             ratio=self.ratio,
             similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
