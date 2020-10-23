@@ -3,7 +3,9 @@ import random
 import string
 import tempfile
 import unittest
+from collections import defaultdict
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Type
+from unittest.case import SkipTest
 
 import numpy
 import pandas
@@ -11,8 +13,8 @@ import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
-from arclus.similarity import LpSimilarity
+from arclus.models.baselines import Coreset, ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
+from arclus.similarity import CosineSimilarity, LpSimilarity
 
 
 def _generate_random_data(
@@ -23,13 +25,14 @@ def _generate_random_data(
     num_clusters: int,
 ) -> pandas.DataFrame:
     data = []
+    clusters = string.ascii_letters[:num_clusters]
     for claim in range(num_claims):
         num = random.randrange(min_premises, max_premises)
         premises = random.sample(premise_ids, num)
         relevance = numpy.random.randint(3, size=num)
-        clusters = numpy.random.randint(num_clusters, size=num)
+        this_clusters = [random.choice(clusters) for _ in range(num)]
         claims = [claim] * num
-        data.extend(zip(claims, premises, relevance, clusters))
+        data.extend(zip(claims, premises, relevance, this_clusters))
     return pandas.DataFrame(
         data=data,
         columns=[
@@ -61,27 +64,28 @@ class RankingTests:
     def _pre_instantiation_hook(self, kwargs: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         """Prepare instantiation."""
         self.all_premise_ids = [c for c in string.ascii_letters[:self.num_premises]]
-        return kwargs
-
-    def test_fit(self):
-        """Test fit."""
         num_clusters = 3
         min_premises = 3
         max_premises = self.num_premises // 2
-        training_data = _generate_random_data(
+        self.training_data = _generate_random_data(
             num_claims=self.num_claims,
             premise_ids=self.all_premise_ids,
             max_premises=max_premises,
             min_premises=min_premises,
             num_clusters=num_clusters,
         )
+        return kwargs
+
+    def test_fit(self):
+        """Test fit."""
         self.instance.fit(
-            training_data=training_data,
+            training_data=self.training_data,
             k=self.k,
         )
 
     def test_rank(self):
         """Test rank."""
+        self.instance.fit(training_data=self.training_data, k=self.k)
         this_premise_ids = random.sample(self.all_premise_ids, 2 * self.k)
         ranking = self.instance.rank(claim_id=0, premise_ids=this_premise_ids, k=self.k)
         assert isinstance(ranking, (list, tuple))
@@ -235,3 +239,28 @@ class CoreSetUtilityTests(unittest.TestCase):
         similarity = LpSimilarity(p=2).sim(vectors, vectors)
         result = core_set(similarity=similarity, first_id=0, k=3)
         assert result == [0, 2, 3]
+
+
+class CoreSetTests(RankingTests, unittest.TestCase):
+    """Test for CoreSet ranking method."""
+
+    cls = Coreset
+
+    def setUp(self):  # noqa: D102
+        # mock
+        self.kwargs = self.kwargs or {}
+        self.kwargs = self._pre_instantiation_hook(kwargs=self.kwargs)
+        self.instance = self.cls.__new__(self.cls)
+
+        # mock
+        fake_similarities = defaultdict(lambda: random.random())
+        self.instance.__dict__["precomputed_similarities"] = fake_similarities
+
+        fake_states = defaultdict(lambda: torch.rand(self.dim))
+        self.instance.__dict__["precomputed_states"] = fake_states
+
+        self.instance.__dict__["premise_premise_similarity"] = CosineSimilarity()
+        self.instance.__dict__["threshold"] = None
+
+    def test_get_baseline_method_by_name(self):
+        raise SkipTest("Expensive initialization")
