@@ -6,6 +6,7 @@ import pathlib
 import re
 from hashlib import sha512
 
+import mlflow
 import pandas
 import tqdm
 
@@ -13,8 +14,6 @@ from arclus.models import get_baseline_method_by_name
 from arclus.pipeline import evaluate_ranking_method
 from arclus.settings import DATA_ROOT
 from arclus.similarity import get_similarity_by_name
-import mlflow
-
 from arclus.utils import flatten_dict
 
 logging.basicConfig(level=logging.ERROR)
@@ -99,6 +98,17 @@ def main():
                       debug=True,
                   )
                   for similarity in ('l2', 'l1', 'cos')
+              ] + [
+                  # Biased Coreset
+                  dict(
+                      name="biased_coreset",
+                      premise_premise_similarity=similarity,
+                      similarities_dir=similarities,
+                      model_path=model_path,
+                      debug=True,
+                  )
+                  for similarity in ('l2', 'l1', 'cos')
+
               ]
 
     # filter configurations based on keywords
