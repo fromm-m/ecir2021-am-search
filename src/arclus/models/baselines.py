@@ -241,6 +241,34 @@ def _load_or_compute_similarities(
     return precomputed_similarities, precomputed_states
 
 
+def get_premise_representations_for_claim(
+    claim_id: int,
+    premise_ids: Sequence[str],
+    source: Mapping[Tuple[str, int], torch.FloatTensor],
+) -> torch.FloatTensor:
+    """
+    Lookup premise representations from a dictionary of precomputed representations.
+
+    :param claim_id:
+        The claim ID.
+    :param premise_ids:
+        The premise IDs.
+    :param source:
+        The precomputed representations, all vectors of same shape.
+
+    :return: shape: (num_premises, dim)
+        A tensor of premise representations.
+    """
+    """Get premise representations."""
+    return torch.stack(
+        [
+            source[premise_id, claim_id]
+            for premise_id in premise_ids
+        ],
+        dim=0,
+    )
+
+
 class ZeroShotRanking(RankingMethod, ABC):
     """Abstract base class for zero-shot methods."""
 
@@ -376,34 +404,6 @@ class ZeroShotClusterKNN(ZeroShotRanking):
 
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids]
-
-
-def get_premise_representations_for_claim(
-    claim_id: int,
-    premise_ids: Sequence[str],
-    source: Mapping[Tuple[str, int], torch.FloatTensor],
-) -> torch.FloatTensor:
-    """
-    Lookup premise representations from a dictionary of precomputed representations.
-
-    :param claim_id:
-        The claim ID.
-    :param premise_ids:
-        The premise IDs.
-    :param source:
-        The precomputed representations, all vectors of same shape.
-
-    :return: shape: (num_premises, dim)
-        A tensor of premise representations.
-    """
-    """Get premise representations."""
-    return torch.stack(
-        [
-            source[premise_id, claim_id]
-            for premise_id in premise_ids
-        ],
-        dim=0,
-    )
 
 
 class LearnedSimilarityBasedMethod(RankingMethod, ABC):
