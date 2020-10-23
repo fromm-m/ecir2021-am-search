@@ -2,6 +2,7 @@
 import logging
 import pathlib
 from abc import ABC
+from collections import defaultdict
 from logging import Logger
 from operator import itemgetter
 from pathlib import Path
@@ -11,6 +12,7 @@ import pandas
 import torch
 from sklearn.cluster import KMeans
 
+from arclus.evaluation import mndcg_score
 from arclus.models.base import RankingMethod
 from arclus.settings import (
     CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST,
@@ -542,12 +544,49 @@ class Coreset(LearnedSimilarityKNN):
         training_data: pandas.DataFrame,
         k: int,
     ):
-        raise NotImplementedError
+        # compute scores for all thresholds
+        scores = defaultdict(dict)
+        thresholds = []
+        claim_ids = training_data["claim_id"].unique().tolist()
+        for claim_id, group in training_data.groupby(by="claim_id"):
+            premise_ids = group["premise_id"].tolist()
+            for threshold in sorted(set(
+                self.precomputed_similarities[premise_id, claim_id]
+                for premise_id in premise_ids
+            )):
+                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=threshold)
+                scores[claim_id][threshold] = mndcg_score(y_pred=y_pred, data=group, k=k)
+                thresholds.append(threshold)
+
+        def _eval_threshold(threshold: float) -> float:
+            score = 0.0
+            for claim_id in claim_ids:
+                # score(MAX_VALUE) = 0
+                # score(MIN_VALUE) = score(min(threshold))
+                other_threshold = min(
+                    (
+                        other_threshold
+                        for other_threshold in scores[claim_id].keys()
+                        if other_threshold > threshold
+                    ),
+                    default=None,
+                )
+                if other_threshold is not None:
+                    score += scores[claim_id, other_threshold]
+                # else:
+                #     score += 0
+            return score
+
+        # choose threshold
+        self.threshold = max(thresholds, key=_eval_threshold)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.threshold is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
+        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=self.threshold)
+
+    def _rank(self, claim_id, premise_ids, k, threshold: float) -> Sequence[str]:
         def lookup_similarity(premise_id: str) -> float:
             """Get similarity between a premise and query claim."""
             return self.precomputed_similarities[premise_id, claim_id]
@@ -556,18 +595,15 @@ class Coreset(LearnedSimilarityKNN):
         premise_ids = [
             premise_id
             for premise_id in premise_ids
-            if lookup_similarity(premise_id=premise_id) > self.threshold
+            if lookup_similarity(premise_id=premise_id) > threshold
         ]
-
         # select first premise as closest to claim
         first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
-
         # get premise representations
         premise_repr = torch.stack(
             [
                 self.precomputed_states[p_id, claim_id]
                 for p_id in premise_ids
-                if lookup_similarity(premise_id=p_id) > self.threshold
             ],
             dim=0,
         )
