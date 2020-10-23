@@ -649,11 +649,6 @@ class Coreset(LearnedSimilarityKNN):
             if lookup_similarity(premise_id=premise_id) > threshold
         ]
 
-        if len(premise_ids) < 1:
-            logger.warning("No premise after thresholding.")
-
-        chosen = []
-
         if len(premise_ids) > 0:
             # select first premise as closest to claim
             first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
@@ -674,6 +669,9 @@ class Coreset(LearnedSimilarityKNN):
 
             # convert back to premise_ids
             chosen = [premise_ids[i] for i in local_ids]
+        else:
+            logger.warning("No premise after thresholding.")
+            chosen = []
 
         if fill_to_k and len(chosen) < k:
             chosen += sorted(
