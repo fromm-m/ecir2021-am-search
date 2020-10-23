@@ -7,7 +7,7 @@ from hashlib import sha512
 import pandas
 import tqdm
 
-from arclus.evaluation import evaluate_ranking_method
+from arclus.pipeline import evaluate_ranking_method
 from arclus.models import get_baseline_method_by_name
 from arclus.similarity import get_similarity_by_name
 from arclus.settings import DATA_ROOT
