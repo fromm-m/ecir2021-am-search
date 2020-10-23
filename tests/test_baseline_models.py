@@ -241,54 +241,56 @@ class CoreSetUtilityTests(unittest.TestCase):
         assert result == [0, 2, 3]
 
 
-class CoreSetTests(RankingTests, unittest.TestCase):
+class PrecomputedSimilarityDependentTests(RankingTests):
+    """Base class for ranking methods dependent on precomputed similarities."""
+
+    def setUp(self):  # noqa: D102
+        # mock
+        self.kwargs = self.kwargs or {}
+        self.kwargs = self._pre_instantiation_hook(kwargs=self.kwargs)
+        self.instance = self.cls.__new__(self.cls)
+
+        # mock
+        fake_similarities = defaultdict(lambda: random.random())
+        self.instance.__dict__["precomputed_similarities"] = fake_similarities
+
+        fake_states = defaultdict(lambda: torch.rand(self.dim))
+        self.instance.__dict__["precomputed_states"] = fake_states
+
+        for key, value in self.kwargs.items():
+            self.instance.__dict__[key] = value
+
+        self._post_fake_instantiation_hook()
+
+    def _post_fake_instantiation_hook(self):
+        pass
+
+    def test_get_baseline_method_by_name(self):
+        raise SkipTest("Expensive initialization")
+
+
+class CoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
     """Test for CoreSet ranking method."""
 
     cls = Coreset
+    kwargs = dict(
+        premise_premise_similarity=CosineSimilarity(),
+        debug=False,
+    )
 
-    def setUp(self):  # noqa: D102
-        # mock
-        self.kwargs = self.kwargs or {}
-        self.kwargs = self._pre_instantiation_hook(kwargs=self.kwargs)
-        self.instance = self.cls.__new__(self.cls)
-
-        # mock
-        fake_similarities = defaultdict(lambda: random.random())
-        self.instance.__dict__["precomputed_similarities"] = fake_similarities
-
-        fake_states = defaultdict(lambda: torch.rand(self.dim))
-        self.instance.__dict__["precomputed_states"] = fake_states
-
-        self.instance.__dict__["premise_premise_similarity"] = CosineSimilarity()
+    def _post_fake_instantiation_hook(self):  # noqa: D102
         self.instance.__dict__["threshold"] = None
-        self.instance.__dict__["debug"] = False
-
-    def test_get_baseline_method_by_name(self):
-        raise SkipTest("Expensive initialization")
 
 
-class BiasCoreSetTests(RankingTests, unittest.TestCase):
+class BiasCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
     """Test for BiasedCoreSet ranking method."""
 
     cls = BiasedCoreset
+    kwargs = dict(
+        premise_premise_similarity=CosineSimilarity(),
+        resolution=10,
+        debug=False,
+    )
 
-    def setUp(self):  # noqa: D102
-        # mock
-        self.kwargs = self.kwargs or {}
-        self.kwargs = self._pre_instantiation_hook(kwargs=self.kwargs)
-        self.instance = self.cls.__new__(self.cls)
-
-        # mock
-        fake_similarities = defaultdict(lambda: random.random())
-        self.instance.__dict__["precomputed_similarities"] = fake_similarities
-
-        fake_states = defaultdict(lambda: torch.rand(self.dim))
-        self.instance.__dict__["precomputed_states"] = fake_states
-
-        self.instance.__dict__["premise_premise_similarity"] = CosineSimilarity()
+    def _post_fake_instantiation_hook(self):  # noqa: D102
         self.instance.__dict__["alpha"] = None
-        self.instance.__dict__["resolution"] = 10
-        self.instance.__dict__["debug"] = False
-
-    def test_get_baseline_method_by_name(self):
-        raise SkipTest("Expensive initialization")
