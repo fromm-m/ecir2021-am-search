@@ -81,6 +81,13 @@ def main():
         )
         for softmax in (False, True)
         for cluster_ratio in (0.25, 0.5, 1.0, None)
+    ] + [
+        # 6. Coreset
+        dict(
+            name="coreset",
+            premise_premise_similarity=similarity
+        )
+        for similarity in ('l2', 'l1', 'cos')
     ]
 
     # ensure output root exists
