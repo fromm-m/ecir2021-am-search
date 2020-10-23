@@ -494,7 +494,7 @@ def core_set(
     """
     n = similarity.shape[0]
     assert similarity.shape == (n, n)
-    assert k < n
+    k = min(k, n)
 
     result = [first_id]
 
@@ -572,7 +572,7 @@ class Coreset(LearnedSimilarityKNN):
                     default=None,
                 )
                 if other_threshold is not None:
-                    score += scores[claim_id, other_threshold]
+                    score += scores[claim_id][other_threshold]
                 # else:
                 #     score += 0
             return score
@@ -597,6 +597,11 @@ class Coreset(LearnedSimilarityKNN):
             for premise_id in premise_ids
             if lookup_similarity(premise_id=premise_id) > threshold
         ]
+
+        if len(premise_ids) < 1:
+            logger.warning("No premise after thresholding.")
+            return []
+
         # select first premise as closest to claim
         first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
         # get premise representations
