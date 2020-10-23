@@ -378,11 +378,14 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         return [premise_ids[i] for i in top_ids]
 
 
-class LearnedSimilarityKNN(RankingMethod):
-    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
+class LearnedSimilarityBasedMethod(RankingMethod, ABC):
+    """Base class for ranking methods based on learned similarity between claims and premises."""
 
     #: The precomputed similarities.
     precomputed_similarities: Mapping[Tuple[str, int], float]
+
+    #: The precomputed representations
+    precomputed_states: Optional[Mapping[str, torch.FloatTensor]]
 
     def __init__(
         self,
@@ -422,11 +425,15 @@ class LearnedSimilarityKNN(RankingMethod):
 
         return lookup_similarity
 
+
+class LearnedSimilarityKNN(LearnedSimilarityBasedMethod):
+    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
+
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         return sorted(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id), reverse=True)[:k]
 
 
-class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
+class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
 
     def __init__(
@@ -528,7 +535,7 @@ def core_set(
     return result
 
 
-class BaseCoreSetRanking(LearnedSimilarityKNN):
+class BaseCoreSetRanking(LearnedSimilarityBasedMethod):
     def __init__(
         self,
         model_path: str,
@@ -813,7 +820,7 @@ class BiasedCoreset(BaseCoreSetRanking):
         return [premise_ids[i] for i in local_ids]
 
 
-class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityKNN):
+class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityBasedMethod):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
 
     def __init__(
