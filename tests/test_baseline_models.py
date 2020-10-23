@@ -175,3 +175,19 @@ class CoreSetUtilityTests(unittest.TestCase):
         assert len(result) == k
         assert len(set(result)) == len(result)
         assert all(0 <= i < n for i in result)
+        assert result[0] == first_id
+
+    def test_manual(self):
+        """Hand-curated test."""
+        vectors = torch.as_tensor(
+            data=[
+                [0, 0],
+                [1, 0],
+                [2, 0],
+                [1, 1],
+            ],
+            dtype=torch.float32,
+        )
+        similarity = LpSimilarity(p=2).sim(vectors, vectors)
+        result = core_set(similarity=similarity, first_id=0, k=3)
+        assert result == [0, 2, 3]
