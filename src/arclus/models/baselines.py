@@ -4,16 +4,18 @@ import pathlib
 from abc import ABC
 from logging import Logger
 from operator import itemgetter
-from typing import Mapping, Optional, Sequence, Tuple
 from pathlib import Path
+from typing import Mapping, Optional, Sequence, Tuple
 
 import pandas
 import torch
 from sklearn.cluster import KMeans
 
 from arclus.models.base import RankingMethod
-from arclus.settings import CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, \
-    PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
+from arclus.settings import (
+    CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST,
+    PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES,
+)
 from arclus.similarity import Similarity
 from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -468,6 +470,48 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
             k=k,
             ratio=self.ratio,
         )
+
+
+def core_set(
+    similarity: torch.FloatTensor,
+    first_id: int,
+    k: int,
+) -> Sequence[int]:
+    """
+    Coreset method based on full pairwise similarity matrix.
+
+    :param similarity: shape: (n, n)
+        The full pairwise similarity/score matrix. Larger values indicate better fit.
+    :param first_id: >=0, <n
+        The first chosen ID.
+    :param k: >0
+        The number of candidates to choose.
+
+    :return:
+        An ordered list of k selected candidate IDs.
+    """
+    n = similarity.shape[0]
+    assert similarity.shape == (n, n)
+    assert k < n
+
+    result = [first_id]
+
+    chosen_mask = torch.zeros(n, dtype=torch.bool)
+    chosen_mask[first_id] = True
+
+    for i in range(1, k):
+        # select similarity from candidates to chosen, shape: (num_cand, num_chosen)
+        score = similarity[chosen_mask].t()[~chosen_mask]
+        # largest similarity to chosen, shape: (num_cand), smallest similarity
+        next_id = score.max(dim=-1).argmin().item()
+
+        # update mask
+        chosen_mask[next_id] = True
+
+        # append to result
+        result.append(next_id)
+
+    return result
 
 
 class Coreset(LearnedSimilarityKNN):
