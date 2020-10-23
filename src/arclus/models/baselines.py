@@ -579,10 +579,17 @@ class Coreset(LearnedSimilarityKNN):
                 thresholds.append(threshold)
 
         def _eval_threshold(threshold: float) -> float:
+            # Since the filtering is given by
+            #   [
+            #       p
+            #       for p in premises
+            #       if sim(claim, p) > threshold
+            #   ]
+            # a value t between two adjacency threshold t_low and t_high behaves as the higher threshold
+            # Thus, the score of t is equal to the smallest threshold t' which is larger than t
+            # If t is chosen larger than the largest threshold, no premises remains. Thus, the score is 0.
             score = 0.0
             for claim_id in claim_ids:
-                # score(MAX_VALUE) = 0
-                # score(MIN_VALUE) = score(min(threshold))
                 other_threshold = min(
                     (
                         other_threshold
