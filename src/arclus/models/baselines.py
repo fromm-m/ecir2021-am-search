@@ -5,7 +5,6 @@ from abc import ABC
 from collections import defaultdict
 from logging import Logger
 from operator import itemgetter
-from pathlib import Path
 from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import numpy
@@ -171,56 +170,6 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         return [premise_ids[i] for i in top_ids]
 
 
-def _prepare_claim_similarities(
-    cache_root: str,
-    model_path: str,
-    product: bool,
-) -> pathlib.Path:
-    """
-    Prepare similarities.
-
-    :param cache_root:
-        The cache_root for the model.
-    :param model_path:
-        The path to the model.
-    :param product:
-        Whether to compute similarities to all result_claims, or only to the relevant query claims.
-
-    :return:
-        The path of the precomputed similarities.
-    """
-    output_path = PREP_TEST_PRODUCT_SIMILARITIES if product else PREP_TEST_SIMILARITIES
-    if not Path(output_path).is_file():
-        logger.info('computing similarities')
-        # load bert model and the data
-        batch_size = 180
-        logger.info('Load data')
-        loader, data, model, guids = load_bert_model_and_data_no_args(
-            model_path=model_path,
-            task_name="SIM",
-            batch_size=batch_size,
-            data_dir=PREP_ASSIGNMENTS_TEST,
-            overwrite_cache=True,
-            max_seq_length=512,
-            model_type="bert",
-            cache_root=cache_root,
-            product=product,
-        )
-
-        # generate logits for all claims-premise pairs
-        logger.info('Run inference')
-        predictions = inference_no_args(
-            data=data,
-            loader=loader,
-            logger=logger,
-            model=model,
-            batch_size=batch_size,
-        )
-        precomputed_similarities = dict(zip(guids, predictions))
-        torch.save(precomputed_similarities, output_path)
-    return output_path
-
-
 def get_query_claim_similarities(
     sim: Mapping[Tuple[str, int], float],
     softmax: bool,
@@ -337,49 +286,14 @@ class LearnedSimilarityKNN(RankingMethod):
         """
         if cache_root is None:
             cache_root = '/tmp/arclus/bert'
-        buffer_path_sim = similarities_dir / PREP_TEST_SIMILARITIES
-        buffer_path_states = similarities_dir / PREP_TEST_STATES
-        logger.info(f'Using softmax: {softmax}')
-        if not buffer_path_sim.is_file() or not buffer_path_states.is_file():
-            logger.info('computing similarities')
-            # load bert model and the data
-            batch_size = 120
-            logger.info('Load data')
-            loader, data, model, guids = load_bert_model_and_data_no_args(
-                model_path=model_path,
-                task_name="SIM",
-                batch_size=batch_size,
-                data_dir=PREP_ASSIGNMENTS_TEST,
-                overwrite_cache=True,
-                max_seq_length=512,
-                model_type="bert",
-                cache_root=cache_root,
-                product=False
-            )
-
-            # generate logits for all claims-premise pairs
-            # predictions = inference(args, data, loader, logger, model)
-            logger.info('Run inference')
-            predictions, states = inference_no_args(
-                data=data,
-                loader=loader,
-                logger=logger,
-                model=model,
-                batch_size=batch_size,
-            )
-            precomputed_similarities = dict(zip(guids, predictions))
-            precomputed_states = dict(zip(guids, states))
-
-            torch.save(precomputed_similarities, buffer_path_sim)
-            torch.save(precomputed_states, buffer_path_states)
-
-        self.precomputed_similarities = torch.load(buffer_path_sim)
-        self.precomputed_states = torch.load(buffer_path_states)
-        if softmax:
-            self.precomputed_similarities = {k: torch.softmax(torch.as_tensor(v, dtype=float), dim=-1)[1] for k, v in
-                                             self.precomputed_similarities.items()}
-        else:
-            self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
+        self.precomputed_similarities, self.precomputed_states = _load_or_compute_similarities(
+            cache_root=cache_root,
+            model_path=model_path,
+            similarities_dir=similarities_dir,
+            softmax=softmax,
+            product=False,
+            with_states=True,
+        )
 
     def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
         """Create a similarity lookup for premises, with a fixed claim."""
@@ -832,11 +746,13 @@ class BiasedCoreset(BaseCoreSetRanking):
         return [premise_ids[i] for i in local_ids]
 
 
-def _get_product_similarities(
+def _load_or_compute_similarities(
     cache_root: str,
     model_path: str,
     similarities_dir: pathlib.Path,
     softmax: bool = True,
+    product: bool = True,
+    with_states: bool = False,
 ) -> Mapping[Tuple[str, int], float]:
     """
     Load the predicted similarities for all possible (premise_id, claim_id) pairs.
@@ -851,13 +767,21 @@ def _get_product_similarities(
     :return:
         A mapping (premise_id, claim_id) -> similarity.
     """
-    buffer_path_product = similarities_dir / PREP_TEST_PRODUCT_SIMILARITIES
+    if product:
+        buffer_path = similarities_dir / PREP_TEST_PRODUCT_SIMILARITIES
+    else:
+        buffer_path = similarities_dir / PREP_TEST_SIMILARITIES
+    buffer_path_states = precomputed_states = None
+    if with_states:
+        if product:
+            raise NotImplementedError
+        buffer_path_states = similarities_dir / PREP_TEST_STATES
 
-    if not buffer_path_product.is_file():
-        logger.info('computing similarities')
+    if not buffer_path.is_file() or (with_states and not buffer_path_states.is_file()):
+        logger.info("Computing similarities")
 
         # load bert model and the data
-        logger.info('Load data')
+        logger.info("Load data")
         batch_size = 120
         loader, data, model, guids = load_bert_model_and_data_no_args(
             model_path=model_path,
@@ -872,35 +796,36 @@ def _get_product_similarities(
         )
 
         # generate logits for all claims-premise pairs
-        logger.info('Run inference')
-        predictions, _ = inference_no_args(
+        logger.info("Run inference")
+        predictions, states = inference_no_args(
             data=data,
             loader=loader,
             logger=logger,
             model=model,
             batch_size=batch_size,
         )
-        precomputed_similarities = dict(zip(guids, predictions))
 
         # save artifact
-        torch.save(precomputed_similarities, buffer_path_product)
+        precomputed_similarities = dict(zip(guids, predictions))
+        torch.save(precomputed_similarities, buffer_path)
+        logger.info(f"Saved similarities to {buffer_path}")
+
+        if with_states:
+            precomputed_states = dict(zip(guids, states))
+            torch.save(precomputed_states, buffer_path_states)
+            logger.info(f"Saved states to {buffer_path_states}")
     else:
-        logger.info(f"Loading precomputed similarities from {buffer_path_product}")
-        precomputed_similarities = torch.load(buffer_path_product)
+        logger.info(f"Loading precomputed similarities from {buffer_path}")
+        precomputed_similarities = torch.load(buffer_path)
 
-    # optionally apply softmax normalization
-    if softmax:
-        logger.info("Applying softmax.")
-        precomputed_similarities = {
-            premise_claim_pair: torch.as_tensor(logits, dtype=torch.float32).softmax(dim=-1)
-            for premise_claim_pair, logits in precomputed_similarities.items()
-        }
+        if with_states:
+            logger.info(f"Loading precomputed states from {buffer_path_states}")
+            precomputed_states = torch.load(buffer_path_states)
 
-    # keep score of positive class (i.e. they are similar).
-    precomputed_similarities = {
-        premise_claim_pair: score[1]
-        for premise_claim_pair, score in precomputed_similarities.items()
-    }
+    precomputed_similarities = get_query_claim_similarities(sim=precomputed_similarities, softmax=softmax)
+
+    if with_states:
+        return precomputed_similarities, precomputed_states
 
     return precomputed_similarities
 
@@ -931,53 +856,36 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        logger.info(f'Using softmax: {softmax}')
-        buffer_path = similarities_dir / PREP_TEST_SIMILARITIES
-        self.precomputed_similarities_resultclaims = _get_product_similarities(
+        sim_premise_to_all_claims = _load_or_compute_similarities(
             cache_root=cache_root,
             model_path=model_path,
             similarities_dir=similarities_dir,
-            softmax=softmax
+            softmax=softmax,
+            product=True,
+            with_states=False,
         )
-
-        self.precomputed_similarities = torch.load(buffer_path)
-        if softmax:
-            self.precomputed_similarities = {k: torch.softmax(torch.FloatTensor(v, dtype=float), dim=-1) for k, v in
-                                             self.precomputed_similarities.items()}
-        self.precomputed_similarities = {k: v[1] for k, v in self.precomputed_similarities.items()}
-
-        # verify that similarities are available for all claim, premise pairs
-        premise_ids, claim_ids = [
-            sorted(set(map(itemgetter(pos), self.precomputed_similarities_resultclaims.keys())))
-
-            for pos in (0, 1)
-        ]
-        assert set(self.precomputed_similarities_resultclaims.keys()) == set(
-            (pid, cid) for pid in premise_ids for cid in claim_ids)
-
-        # prepare premise representations; make sure that claims are always in the same order
-        self.premise_representations = {
-            premise_id: torch.as_tensor(
-                data=[
-                    self.precomputed_similarities_resultclaims[premise_id, claim_id]
-                    for claim_id in claim_ids
-                ],
-                dtype=torch.float32,
-            )
-            for premise_id in premise_ids
-        }
-
+        self.premise_representations = get_premise_representations(sim=sim_premise_to_all_claims, softmax=softmax)
+        self.precomputed_similarities = _load_or_compute_similarities(
+            cache_root=cache_root,
+            model_path=model_path,
+            similarities_dir=similarities_dir,
+            softmax=softmax,
+            product=False,
+            with_states=False,
+        )
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        # get premise representations, as similarity vector to all claims
-        premise_repr = torch.stack([torch.FloatTensor([v for k, v in self.precomputed_similarities_resultclaims.items()
-                                                       if k[0] == premise_id]) for premise_id in premise_ids], dim=0)
-
         return _premise_cluster_filtered(
             claim_id=claim_id,
             premise_ids=premise_ids,
-            premise_repr=premise_repr,
+            premise_repr=torch.stack(
+                [
+                    self.premise_representations[pid]
+                    for pid in premise_ids
+                ],
+                dim=0,
+            ),
             similarities=self.precomputed_similarities,
             k=k,
             ratio=self.ratio,
