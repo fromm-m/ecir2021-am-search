@@ -12,14 +12,14 @@ import pandas
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.evaluation import mndcg_score
-from arclus.models.base import RankingMethod
-from arclus.settings import (
+from .base import RankingMethod
+from ..evaluation import mndcg_score
+from ..settings import (
     CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST,
     PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES,
 )
-from arclus.similarity import CosineSimilarity, Similarity
-from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
+from ..similarity import CosineSimilarity, Similarity
+from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
 logger: Logger = logging.getLogger(__name__)
 
