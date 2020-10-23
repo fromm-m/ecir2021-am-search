@@ -716,7 +716,7 @@ class BiasedCoreset(LearnedSimilarityKNN):
         training_data: pandas.DataFrame,
         k: int,
     ):
-        def _evaluate_alpha(alpha: float):
+        def _evaluate_alpha(alpha: float) -> float:
             score = 0.0
             for claim_id, group in training_data.groupby(by="claim_id"):
                 premise_ids = group["premise_id"].tolist()
