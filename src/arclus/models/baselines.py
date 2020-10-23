@@ -168,7 +168,7 @@ def _load_or_compute_similarities(
     softmax: bool = True,
     product: bool = True,
     with_states: bool = False,
-) -> Tuple[Mapping[Tuple[str, int], float], Optional[]]:
+) -> Tuple[Mapping[Tuple[str, int], float], Optional[Mapping[str, torch.FloatTensor]]]:
     """
     Load the predicted similarities for all possible (premise_id, claim_id) pairs.
 
