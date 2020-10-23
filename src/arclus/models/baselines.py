@@ -8,6 +8,7 @@ from operator import itemgetter
 from pathlib import Path
 from typing import Mapping, Optional, Sequence, Tuple
 
+import numpy
 import pandas
 import torch
 from sklearn.cluster import KMeans
@@ -18,7 +19,7 @@ from ..settings import (
     CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST,
     PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES,
 )
-from ..similarity import CosineSimilarity, Similarity
+from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
 from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
 logger: Logger = logging.getLogger(__name__)
@@ -526,6 +527,7 @@ class Coreset(LearnedSimilarityKNN):
         similarities_dir: str,
         premise_premise_similarity: Similarity = CosineSimilarity(),
         cache_root: str = '/nfs/data3/obermeier/arclus/temp/',
+        debug: bool = False,
     ):
         """
         Initialize the method.
@@ -537,7 +539,10 @@ class Coreset(LearnedSimilarityKNN):
         """
         super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
         self.threshold = None
+        if isinstance(premise_premise_similarity, str):
+            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
         self.premise_premise_similarity = premise_premise_similarity
+        self.debug = debug
 
     def fit(
         self,
@@ -575,10 +580,17 @@ class Coreset(LearnedSimilarityKNN):
                     score += scores[claim_id][other_threshold]
                 # else:
                 #     score += 0
-            return score
+            return score / len(claim_ids)
 
         # choose threshold
-        self.threshold = max(thresholds, key=_eval_threshold)
+        if self.debug:
+            thresholds = numpy.asarray(thresholds)
+            _eval_threshold = numpy.vectorize(_eval_threshold)
+            scores = _eval_threshold(thresholds)
+            numpy.save(f"/tmp/scores_{self.premise_premise_similarity.__class__.__name__}_{abs(hash(tuple(sorted(claim_ids))))}.npy", numpy.stack([thresholds, scores]))
+            self.threshold = thresholds[scores.argmax()]
+        else:
+            self.threshold = max(thresholds, key=_eval_threshold)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.threshold is None:
