@@ -571,11 +571,12 @@ class Coreset(LearnedSimilarityKNN):
             premise_repr_selected = torch.stack([self.precomputed_states[p_id, claim_id] for p_id in result],
                                                 dim=0)  # the selected representations
             for _ in range(k):
-                prepared_p_repr_sel = premise_repr_selected.reshape(len(premise_repr_selected), 768)
-                prepared_p_repr = premise_repr.reshape(len(premise_repr), 768)
+                prepared_p_repr_sel = premise_repr_selected.reshape(len(premise_repr_selected), -1)
+                prepared_p_repr = premise_repr.reshape(len(premise_repr), -1)
+                # hyperparameter cosine? l1 / l2?
                 distances = torch.cdist(prepared_p_repr_sel,
                                         prepared_p_repr)  # result shape: n_specified, 1; others shape: n_others, 1
-                sum_distances = torch.sum(distances, dim=0)  # sum of dist of others to current selected
+                sum_distances = torch.min(distances, dim=0)  # sum of dist of others to current selected
                 max_dist_id = int(torch.argmax(sum_distances))
                 next_id = premise_ids_above_threshold[max_dist_id]
                 result.append(next_id)
