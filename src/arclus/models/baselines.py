@@ -477,8 +477,6 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
 
         :param cluster_ratio: >0
             The relative number of clusters to use. If None, use k.
-        :param premises_path:
-            The path where the precomputed premise representations are stored.
         :param softmax:
             Whether to apply softmax on the scores for the pairwise similarity model.
         :param model_path:
