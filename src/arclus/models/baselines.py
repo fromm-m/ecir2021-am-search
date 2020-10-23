@@ -273,6 +273,7 @@ class LearnedSimilarityKNN(RankingMethod):
         model_path: str,
         similarities_dir: str,
         cache_root: Optional[str] = None,
+        with_states: bool = True,
     ):
         """
         Initialize the method.
@@ -292,7 +293,7 @@ class LearnedSimilarityKNN(RankingMethod):
             similarities_dir=similarities_dir,
             softmax=softmax,
             product=False,
-            with_states=True,
+            with_states=with_states,
         )
 
     def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
@@ -309,25 +310,19 @@ class LearnedSimilarityKNN(RankingMethod):
 
 
 def _premise_cluster_filtered(
-    claim_id: int,
     premise_ids: Sequence[str],
     premise_repr: torch.FloatTensor,
     k: int,
     ratio: Optional[float],
-    similarities: Optional[Mapping[Tuple[str, int], float]] = None,
-    similarity_lookup: Callable[[str], float] = None,
+    similarity_lookup: Callable[[str], float],
 ) -> Sequence[str]:
     """
     Return premises sorted by similarity to claim, filtered to contain at most one element per cluster.
 
-    :param claim_id:
-        The claim ID.
     :param premise_ids:
         The premise IDs.
     :param premise_repr: shape: (num_premises, dim)
         The corresponding representations.
-    :param similarities:
-        The pre-computed similarities.
     :param k:
         The number of premise IDs to return.
     :param ratio:
@@ -340,12 +335,6 @@ def _premise_cluster_filtered(
     # cluster premises
     algorithm = KMeans(n_clusters=_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
     cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
-
-    if similarity_lookup is None:
-        def lookup_similarity(premise_id: str) -> float:
-            return similarities[premise_id, claim_id]
-
-        similarity_lookup = lookup_similarity
 
     seen_clusters = set()
     result = []
@@ -396,7 +385,6 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         premise_repr = torch.stack([self.precomputed_states[premise_id, claim_id] for premise_id in premise_ids], dim=0)
 
         return _premise_cluster_filtered(
-            claim_id=claim_id,
             premise_ids=premise_ids,
             premise_repr=premise_repr,
             k=k,
@@ -753,7 +741,7 @@ def _load_or_compute_similarities(
     softmax: bool = True,
     product: bool = True,
     with_states: bool = False,
-) -> Mapping[Tuple[str, int], float]:
+) -> Tuple[Mapping[Tuple[str, int], float], Optional[]]:
     """
     Load the predicted similarities for all possible (premise_id, claim_id) pairs.
 
@@ -823,20 +811,11 @@ def _load_or_compute_similarities(
             precomputed_states = torch.load(buffer_path_states)
 
     precomputed_similarities = get_query_claim_similarities(sim=precomputed_similarities, softmax=softmax)
-
-    if with_states:
-        return precomputed_similarities, precomputed_states
-
-    return precomputed_similarities
+    return precomputed_similarities, precomputed_states
 
 
-class LearnedSimilarityMatrixClusterKNN(RankingMethod):
+class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityKNN):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
-
-    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
-
-    #: The precomputed similarities.
-    precomputed_similarities: Mapping[Tuple[str, int], float]
 
     def __init__(
         self,
@@ -844,7 +823,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         softmax: bool,
         model_path: str,
         similarities_dir: str,
-        cache_root: str = '/tmp/arclus/bert',
+        cache_root: Optional[str] = None,
     ):
         """
         Initialize the method.
@@ -856,6 +835,13 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
+        super().__init__(
+            softmax=softmax,
+            model_path=model_path,
+            similarities_dir=similarities_dir,
+            cache_root=cache_root,
+            with_states=False,
+        )
         sim_premise_to_all_claims = _load_or_compute_similarities(
             cache_root=cache_root,
             model_path=model_path,
@@ -863,21 +849,12 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
             softmax=softmax,
             product=True,
             with_states=False,
-        )
+        )[0]
         self.premise_representations = get_premise_representations(sim=sim_premise_to_all_claims, softmax=softmax)
-        self.precomputed_similarities = _load_or_compute_similarities(
-            cache_root=cache_root,
-            model_path=model_path,
-            similarities_dir=similarities_dir,
-            softmax=softmax,
-            product=False,
-            with_states=False,
-        )
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         return _premise_cluster_filtered(
-            claim_id=claim_id,
             premise_ids=premise_ids,
             premise_repr=torch.stack(
                 [
@@ -886,7 +863,7 @@ class LearnedSimilarityMatrixClusterKNN(RankingMethod):
                 ],
                 dim=0,
             ),
-            similarities=self.precomputed_similarities,
             k=k,
             ratio=self.ratio,
+            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
         )
