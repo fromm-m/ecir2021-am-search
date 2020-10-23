@@ -535,6 +535,7 @@ class Coreset(LearnedSimilarityKNN):
         premise_premise_similarity: Similarity = CosineSimilarity(),
         cache_root: str = '/nfs/data3/obermeier/arclus/temp/',
         debug: bool = False,
+        fill_to_k: bool = False,
     ):
         """
         Initialize the method.
@@ -550,6 +551,7 @@ class Coreset(LearnedSimilarityKNN):
             premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
         self.premise_premise_similarity = premise_premise_similarity
         self.debug = debug
+        self.fill_to_k = fill_to_k
 
     def fit(
         self,
@@ -566,7 +568,8 @@ class Coreset(LearnedSimilarityKNN):
                 self.precomputed_similarities[premise_id, claim_id]
                 for premise_id in premise_ids
             )):
-                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=threshold)
+                # Do not fill for tuning threshold
+                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=threshold, fill_to_k=False)
                 scores[claim_id][threshold] = mndcg_score(y_pred=y_pred, data=group, k=k)
                 thresholds.append(threshold)
 
@@ -604,9 +607,9 @@ class Coreset(LearnedSimilarityKNN):
         if self.threshold is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
-        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=self.threshold)
+        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=self.threshold, fill_to_k=self.fill_to_k)
 
-    def _rank(self, claim_id, premise_ids, k, threshold: float) -> Sequence[str]:
+    def _rank(self, claim_id, premise_ids, k, threshold: float, fill_to_k: bool) -> Sequence[str]:
         def lookup_similarity(premise_id: str) -> float:
             """Get similarity between a premise and query claim."""
             return self.precomputed_similarities[premise_id, claim_id]
@@ -620,27 +623,38 @@ class Coreset(LearnedSimilarityKNN):
 
         if len(premise_ids) < 1:
             logger.warning("No premise after thresholding.")
-            return []
 
-        # select first premise as closest to claim
-        first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
-        # get premise representations
-        premise_repr = torch.stack(
-            [
-                self.precomputed_states[p_id, claim_id]
-                for p_id in premise_ids
-            ],
-            dim=0,
-        )
+        chosen = []
 
-        # compute pair-wise similarity matrix
-        similarity = self.premise_premise_similarity.sim(premise_repr, premise_repr)
+        if len(premise_ids) > 0:
+            # select first premise as closest to claim
+            first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
+            # get premise representations
+            premise_repr = torch.stack(
+                [
+                    self.precomputed_states[p_id, claim_id]
+                    for p_id in premise_ids
+                ],
+                dim=0,
+            )
 
-        # apply coreset
-        local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
+            # compute pair-wise similarity matrix
+            similarity = self.premise_premise_similarity.sim(premise_repr, premise_repr)
 
-        # convert back to premise_ids
-        return [premise_ids[i] for i in local_ids]
+            # apply coreset
+            local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
+
+            # convert back to premise_ids
+            chosen = [premise_ids[i] for i in local_ids]
+
+        if fill_to_k and len(chosen) < k:
+            chosen += sorted(
+                set(premise_ids).difference(chosen),
+                key=lookup_similarity,
+                reverse=True,
+            )[:k - len(chosen)]
+
+        return chosen
 
 
 class BiasedCoreset(LearnedSimilarityKNN):
