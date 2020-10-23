@@ -97,8 +97,10 @@ def main():
                       similarities_dir=similarities,
                       model_path=model_path,
                       debug=True,
+                      fill_to_k=fill_to_k,
                   )
                   for similarity in ('l2', 'l1', 'cos')
+                  for fill_to_k in (False, True)
               ] + [
                   # Biased Coreset
                   dict(
