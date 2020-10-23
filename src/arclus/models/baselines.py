@@ -168,7 +168,7 @@ def _load_or_compute_similarities(
     softmax: bool = True,
     product: bool = True,
     with_states: bool = False,
-) -> Tuple[Mapping[Tuple[str, int], float], Optional[Mapping[str, torch.FloatTensor]]]:
+) -> Tuple[Mapping[Tuple[str, int], float], Optional[Mapping[Tuple[str, int], torch.FloatTensor]]]:
     """
     Load the predicted similarities for all possible (premise_id, claim_id) pairs.
 
@@ -385,7 +385,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
     precomputed_similarities: Mapping[Tuple[str, int], float]
 
     #: The precomputed representations
-    precomputed_states: Optional[Mapping[str, torch.FloatTensor]]
+    precomputed_states: Optional[Mapping[Tuple[str, int], torch.FloatTensor]]
 
     def __init__(
         self,
@@ -415,6 +415,15 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
             product=False,
             with_states=with_states,
         )
+
+    def _get_premise_representations(self, claim_id: int, premise_ids: Sequence[str]) -> torch.FloatTensor:
+        """Get premise representations."""
+        return torch.stack(
+            [
+                self.precomputed_states[premise_id, claim_id]
+                for premise_id in premise_ids
+            ],
+            dim=0)
 
     def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
         """Create a similarity lookup for premises, with a fixed claim."""
@@ -467,12 +476,9 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        # get premise representations
-        premise_repr = torch.stack([self.precomputed_states[premise_id, claim_id] for premise_id in premise_ids], dim=0)
-
         return _premise_cluster_filtered(
             premise_ids=premise_ids,
-            premise_repr=premise_repr,
+            premise_repr=self._get_premise_representations(claim_id=claim_id, premise_ids=premise_ids),
             k=k,
             ratio=self.ratio,
             similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
@@ -579,13 +585,7 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod):
         first_id = premise_ids.index(max(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id)))
 
         # get premise representations
-        premise_repr = torch.stack(
-            [
-                self.precomputed_states[p_id, claim_id]
-                for p_id in premise_ids
-            ],
-            dim=0,
-        )
+        premise_repr = self._get_premise_representations(claim_id=claim_id, premise_ids=premise_ids)
 
         # compute pair-wise similarity matrix
         similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
