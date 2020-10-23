@@ -479,6 +479,7 @@ def core_set(
     similarity: torch.FloatTensor,
     first_id: int,
     k: int,
+    premise_bias: Optional[torch.FloatTensor] = None,
 ) -> Sequence[int]:
     """
     Coreset method based on full pairwise similarity matrix.
@@ -489,6 +490,8 @@ def core_set(
         The first chosen ID.
     :param k: >0
         The number of candidates to choose.
+    :param premise_bias: shape: (n,)
+        A bias for premise.
 
     :return:
         An ordered list of k selected candidate IDs.
@@ -506,7 +509,11 @@ def core_set(
         # select similarity from candidates to chosen, shape: (num_cand, num_chosen)
         score = similarity[chosen_mask].t()[~chosen_mask]
         # largest similarity to chosen, shape: (num_cand), smallest similarity
-        local_next_id = score.max(dim=-1).values.argmin()
+        candidate_score = score.max(dim=-1).values
+        # apply bias
+        if premise_bias is not None:
+            candidate_score = candidate_score - premise_bias[~chosen_mask]
+        local_next_id = candidate_score.argmin()
         # convert to global id
         next_id = torch.arange(n, device=similarity.device)[~chosen_mask][local_next_id].item()
 
@@ -630,6 +637,103 @@ class Coreset(LearnedSimilarityKNN):
 
         # apply coreset
         local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
+
+        # convert back to premise_ids
+        return [premise_ids[i] for i in local_ids]
+
+
+class BiasedCoreset(LearnedSimilarityKNN):
+    """Convex combination of coreset score and similarity to query."""
+
+    def __init__(
+        self,
+        model_path: str,
+        similarities_dir: str,
+        premise_premise_similarity: Similarity = CosineSimilarity(),
+        cache_root: str = '/nfs/data3/obermeier/arclus/temp/',
+        debug: bool = False,
+        resolution: int = 10,
+    ):
+        """
+        Initialize the method.
+
+        :param model_path:
+            Directory where the fine-tuned bert similarity model checkpoint is located.
+        :param cache_root:
+            The directory where temporary BERT inference files are stored.
+        """
+        super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
+        self.alpha = None
+        if isinstance(premise_premise_similarity, str):
+            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
+        self.premise_premise_similarity = premise_premise_similarity
+        self.debug = debug
+        self.resolution = resolution
+
+    def fit(
+        self,
+        training_data: pandas.DataFrame,
+        k: int,
+    ):
+        def _evaluate_alpha(alpha: float):
+            score = 0.0
+            for claim_id, group in training_data.groupby(by="claim_id"):
+                premise_ids = group["premise_id"].tolist()
+                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha)
+                score += mndcg_score(y_pred=y_pred, data=group, k=k)
+            return score / len(training_data["claim_id"].unique())
+
+        # compute scores for all alpha values
+        alphas = numpy.linspace(start=0, stop=1, num=self.resolution)
+        if self.debug:
+            _eval_alpha = numpy.vectorize(_evaluate_alpha)
+            scores = _eval_alpha(alphas)
+            numpy.save(f"/tmp/convex_scores_{self.premise_premise_similarity}.npy", numpy.stack([alphas, scores]))
+            self.alpha = alphas[scores.argmax()]
+        else:
+            self.alpha = max(alphas, key=_evaluate_alpha)
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        if self.alpha is None:
+            raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
+
+        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=self.alpha)
+
+    def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float) -> Sequence[str]:
+        def lookup_similarity(premise_id: str) -> float:
+            """Get similarity between a premise and query claim."""
+            return self.precomputed_similarities[premise_id, claim_id]
+
+        # select first premise as closest to claim
+        first_id = premise_ids.index(max(premise_ids, key=lookup_similarity))
+
+        # get premise representations
+        premise_repr = torch.stack(
+            [
+                self.precomputed_states[p_id, claim_id]
+                for p_id in premise_ids
+            ],
+            dim=0,
+        )
+
+        claim_premise_similarity = torch.as_tensor(
+            data=[
+                lookup_similarity(premise_id=premise_id)
+                for premise_id in premise_ids
+            ],
+            dtype=torch.float32,
+        )
+
+        # compute pair-wise similarity matrix
+        premise_premise_similarity = self.premise_premise_similarity.sim(premise_repr, premise_repr)
+
+        # apply coreset
+        local_ids = core_set(
+            similarity=alpha * premise_premise_similarity,
+            first_id=first_id,
+            k=k,
+            premise_bias=(1 - alpha) * claim_premise_similarity,
+        )
 
         # convert back to premise_ids
         return [premise_ids[i] for i in local_ids]
