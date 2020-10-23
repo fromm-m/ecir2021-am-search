@@ -639,7 +639,7 @@ class Coreset(LearnedSimilarityKNN):
             )
 
             # compute pair-wise similarity matrix
-            similarity = self.premise_premise_similarity.sim(premise_repr, premise_repr)
+            similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
 
             # apply coreset
             local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
