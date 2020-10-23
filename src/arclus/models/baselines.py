@@ -594,7 +594,8 @@ class Coreset(LearnedSimilarityKNN):
             thresholds = numpy.asarray(thresholds)
             _eval_threshold = numpy.vectorize(_eval_threshold)
             scores = _eval_threshold(thresholds)
-            numpy.save(f"/tmp/scores_{self.premise_premise_similarity.__class__.__name__}_{abs(hash(tuple(sorted(claim_ids))))}.npy", numpy.stack([thresholds, scores]))
+            fold_hash = abs(hash(tuple(sorted(claim_ids))))
+            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity.__class__.__name__}_{fold_hash}.npy", numpy.stack([thresholds, scores]))
             self.threshold = thresholds[scores.argmax()]
         else:
             self.threshold = max(thresholds, key=_eval_threshold)
@@ -688,7 +689,7 @@ class BiasedCoreset(LearnedSimilarityKNN):
         if self.debug:
             _eval_alpha = numpy.vectorize(_evaluate_alpha)
             scores = _eval_alpha(alphas)
-            numpy.save(f"/tmp/convex_scores_{self.premise_premise_similarity}.npy", numpy.stack([alphas, scores]))
+            numpy.save(f"/tmp/convex_scores_k{k}_{self.premise_premise_similarity}.npy", numpy.stack([alphas, scores]))
             self.alpha = alphas[scores.argmax()]
         else:
             self.alpha = max(alphas, key=_evaluate_alpha)
