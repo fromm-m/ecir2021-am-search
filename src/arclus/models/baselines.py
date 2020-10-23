@@ -562,21 +562,37 @@ class Coreset(LearnedSimilarityKNN):
         self,
         training_data: pandas.DataFrame,
         k: int,
-    ):
-        # compute scores for all thresholds
+    ):  # noqa: D102
+        # we exploit that a change occurs only, if a threshold surpasses a measured similarity value
+        # since the total score is the sum over the scores for individual query claims, we can independently compute
+        # the score for each query claim at all points where the score would change, and "interpolate" the rest.
         scores = defaultdict(dict)
-        thresholds = []
+        thresholds = set()
         claim_ids = training_data["claim_id"].unique().tolist()
         for claim_id, group in training_data.groupby(by="claim_id"):
             premise_ids = group["premise_id"].tolist()
-            for threshold in sorted(set(
+
+            # get all thresholds for which a change in the result _for this query claim_ occurs
+            this_thresholds = set(
                 self.precomputed_similarities[premise_id, claim_id]
                 for premise_id in premise_ids
-            )):
-                # Do not fill for tuning threshold
-                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=threshold, fill_to_k=False)
-                scores[claim_id][threshold] = mndcg_score(y_pred=y_pred, data=group, k=k)
-                thresholds.append(threshold)
+            )
+            thresholds.update(this_thresholds)
+
+            # Evaluate each threshold
+            for threshold in this_thresholds:
+                scores[claim_id][threshold] = mndcg_score(
+                    y_pred=self._rank(
+                        claim_id=claim_id,
+                        premise_ids=premise_ids,
+                        k=k,
+                        threshold=threshold,
+                        # Do not fill for tuning threshold
+                        fill_to_k=False,
+                    ),
+                    data=group,
+                    k=k
+                )
 
         def _eval_threshold(threshold: float) -> float:
             # Since the filtering is given by
