@@ -595,7 +595,7 @@ class Coreset(LearnedSimilarityKNN):
             _eval_threshold = numpy.vectorize(_eval_threshold)
             scores = _eval_threshold(thresholds)
             fold_hash = abs(hash(tuple(sorted(claim_ids))))
-            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity.__class__.__name__}_{fold_hash}.npy", numpy.stack([thresholds, scores]))
+            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy", numpy.stack([thresholds, scores]))
             self.threshold = thresholds[scores.argmax()]
         else:
             self.threshold = max(thresholds, key=_eval_threshold)
@@ -689,7 +689,8 @@ class BiasedCoreset(LearnedSimilarityKNN):
         if self.debug:
             _eval_alpha = numpy.vectorize(_evaluate_alpha)
             scores = _eval_alpha(alphas)
-            numpy.save(f"/tmp/convex_scores_k{k}_{self.premise_premise_similarity}.npy", numpy.stack([alphas, scores]))
+            fold_hash = abs(hash(tuple(sorted(training_data["claim_id"].unique()))))
+            numpy.save(f"/tmp/convex_scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy", numpy.stack([alphas, scores]))
             self.alpha = alphas[scores.argmax()]
         else:
             self.alpha = max(alphas, key=_evaluate_alpha)
@@ -701,6 +702,8 @@ class BiasedCoreset(LearnedSimilarityKNN):
         return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=self.alpha)
 
     def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float) -> Sequence[str]:
+        premise_ids = list(premise_ids)
+
         def lookup_similarity(premise_id: str) -> float:
             """Get similarity between a premise and query claim."""
             return self.precomputed_similarities[premise_id, claim_id]
