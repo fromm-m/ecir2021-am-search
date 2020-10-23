@@ -601,6 +601,7 @@ class Coreset(LearnedSimilarityKNN):
                 if other_threshold is not None:
                     score += scores[claim_id][other_threshold]
                 # else: score += 0
+            # normalize score for interpretable results
             return score / len(claim_ids)
 
         # choose threshold
