@@ -15,60 +15,12 @@ from sklearn.cluster import KMeans
 from .base import RankingMethod
 from ..evaluation import mndcg_score
 from ..settings import (
-    CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST,
-    PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES,
+    CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES,
 )
 from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
 from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
 logger: Logger = logging.getLogger(__name__)
-
-
-class ZeroShotRanking(RankingMethod, ABC):
-    """Abstract base class for zero-shot methods."""
-
-    # Pre-computed representations
-    claims: Mapping[int, torch.FloatTensor]
-    premises: Mapping[str, torch.FloatTensor]
-
-    def __init__(
-        self,
-        similarity: Similarity,
-        claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
-        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
-    ):
-        """
-        Initialize the method.
-
-        :param similarity:
-            The similarity to use for the representations.
-        :param claims_path:
-            The path to the pre-computed claims representations.
-        :param premises_path:
-            The path to the pre-computed premises representations.
-        """
-        self.similarity = similarity
-
-        # Load pre-computed representations
-        self.claims = torch.load(claims_path)
-        self.premises = torch.load(premises_path)
-
-
-class ZeroShotKNN(ZeroShotRanking):
-    """Rank according to similarity of pre-trained BERT representations."""
-
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        # get the claim representation
-        claim_repr = self.claims[claim_id].unsqueeze(dim=0)
-        # get premise representations
-        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
-        # find most similar
-        top_ids = self.similarity.sim(
-            left=claim_repr,
-            right=premise_repr,
-        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
-        # re-translate to original IDs
-        return [premise_ids[i] for i in top_ids.tolist()]
 
 
 def _num_clusters(ratio: Optional[float], num_premises: int, k: int) -> int:
@@ -78,96 +30,6 @@ def _num_clusters(ratio: Optional[float], num_premises: int, k: int) -> int:
     n_clusters = max(n_clusters, k)
     n_clusters = min(n_clusters, num_premises)
     return n_clusters
-
-
-class ZeroShotClusterKNN(ZeroShotRanking):
-    """Rank according to similarity of pre-trained BERT representations, return at most one premise for each cluster."""
-
-    def __init__(
-        self,
-        similarity: Similarity,
-        cluster_ratio: Optional[float] = 0.5,
-        claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
-        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
-        cluster_representative: str = 'closest-to-center',
-    ):
-        """
-        Initialize the method.
-
-        :param similarity:
-            The similarity to use for the representations.
-        :param cluster_ratio: >0
-            The relative number of clusters to use. If None, use k.
-        :param claims_path:
-            The path to the pre-computed claims representations.
-        :param premises_path:
-            The path to the pre-computed premises representations.
-        :param cluster_representative:
-            The method to choose a cluster representative. From {'closest-to-center', 'closest-to-claim'}.
-        """
-        super().__init__(similarity=similarity, claims_path=claims_path, premises_path=premises_path)
-        self.ratio = cluster_ratio
-        self.cluster_representative = cluster_representative
-
-    def _get_cluster_representatives(
-        self,
-        claim_repr: torch.FloatTensor,
-        premise_repr: torch.FloatTensor,
-        assignment: torch.LongTensor,
-        centroids: torch.FloatTensor,
-    ) -> torch.LongTensor:
-        n_clusters = centroids.shape[0]
-        local_premise_ids = torch.arange(premise_repr.shape[0])
-        repr_ids = torch.full(size=(n_clusters,), fill_value=-1, dtype=torch.long)
-        for i in range(n_clusters):
-            if self.cluster_representative == 'closest-to-center':
-                anchor = centroids[i].unsqueeze(dim=0)
-            elif self.cluster_representative == 'closest-to-claim':
-                anchor = claim_repr
-            else:
-                raise NotImplementedError(self.cluster_representative)
-            mask = assignment == i
-            if not mask.any():
-                continue
-            premises_in_cluster = premise_repr[mask]
-            idx = self.similarity.sim(
-                left=anchor,
-                right=premises_in_cluster,
-            ).argmax(dim=1)[0]
-            repr_ids[i] = local_premise_ids[mask][idx]
-        return repr_ids
-
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        # get the claim representation
-        claim_repr = self.claims[claim_id].unsqueeze(dim=0)
-
-        # get premise representations
-        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
-        # cluster premises
-        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=len(premise_ids), k=k))
-        cluster_assignment = torch.as_tensor(algorithm.fit_predict(premise_repr.numpy()))
-        cluster_centers = torch.as_tensor(algorithm.cluster_centers_)
-
-        # choose representatives
-        cluster_repr_id = self._get_cluster_representatives(
-            claim_repr=claim_repr,
-            premise_repr=premise_repr,
-            assignment=cluster_assignment,
-            centroids=cluster_centers,
-        )
-
-        # find most similar clusters
-        non_empty_clusters = cluster_repr_id >= 0
-        top_cluster_id = self.similarity.sim(
-            left=claim_repr,
-            right=premise_repr[cluster_repr_id[non_empty_clusters]],
-        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
-
-        # re-translate to local (batch) premise ID
-        top_ids = [cluster_repr_id[non_empty_clusters][i] for i in top_cluster_id.tolist()]
-
-        # re-translate to original IDs
-        return [premise_ids[i] for i in top_ids]
 
 
 def get_query_claim_similarities(
@@ -261,6 +123,261 @@ def get_premise_representations(
     return dict(zip(premise_ids, sim))
 
 
+def _premise_cluster_filtered(
+    premise_ids: Sequence[str],
+    premise_repr: torch.FloatTensor,
+    k: int,
+    ratio: Optional[float],
+    similarity_lookup: Callable[[str], float],
+) -> Sequence[str]:
+    """
+    Return premises sorted by similarity to claim, filtered to contain at most one element per cluster.
+
+    :param premise_ids:
+        The premise IDs.
+    :param premise_repr: shape: (num_premises, dim)
+        The corresponding representations.
+    :param k:
+        The number of premise IDs to return.
+    :param ratio:
+        The cluster ratio.
+
+    :return:
+        A list of (at most) k premise IDs.
+    """
+    num_premises = len(premise_ids)
+    # cluster premises
+    algorithm = KMeans(n_clusters=_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
+    cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
+
+    seen_clusters = set()
+    result = []
+    mapping = dict(zip(premise_ids, cluster_assignment))
+    for premise_id in sorted(premise_ids, key=similarity_lookup, reverse=True):
+        cluster_id = mapping[premise_id]
+        if cluster_id not in seen_clusters:
+            result.append(premise_id)
+        seen_clusters.add(cluster_id)
+    return result[:k]
+
+
+def _load_or_compute_similarities(
+    cache_root: str,
+    model_path: str,
+    similarities_dir: pathlib.Path,
+    softmax: bool = True,
+    product: bool = True,
+    with_states: bool = False,
+) -> Tuple[Mapping[Tuple[str, int], float], Optional[]]:
+    """
+    Load the predicted similarities for all possible (premise_id, claim_id) pairs.
+
+    :param cache_root:
+        The cache root.
+    :param model_path:
+        The model path.
+    :param similarities_dir:
+        The similarities directory.
+
+    :return:
+        A mapping (premise_id, claim_id) -> similarity.
+    """
+    if product:
+        buffer_path = similarities_dir / PREP_TEST_PRODUCT_SIMILARITIES
+    else:
+        buffer_path = similarities_dir / PREP_TEST_SIMILARITIES
+    buffer_path_states = precomputed_states = None
+    if with_states:
+        if product:
+            raise NotImplementedError
+        buffer_path_states = similarities_dir / PREP_TEST_STATES
+
+    if not buffer_path.is_file() or (with_states and not buffer_path_states.is_file()):
+        logger.info("Computing similarities")
+
+        # load bert model and the data
+        logger.info("Load data")
+        batch_size = 120
+        loader, data, model, guids = load_bert_model_and_data_no_args(
+            model_path=model_path,
+            task_name="SIM",
+            batch_size=batch_size,
+            data_dir=PREP_ASSIGNMENTS_TEST,
+            overwrite_cache=True,
+            max_seq_length=512,
+            model_type="bert",
+            cache_root=cache_root,
+            product=False
+        )
+
+        # generate logits for all claims-premise pairs
+        logger.info("Run inference")
+        predictions, states = inference_no_args(
+            data=data,
+            loader=loader,
+            logger=logger,
+            model=model,
+            batch_size=batch_size,
+        )
+
+        # save artifact
+        precomputed_similarities = dict(zip(guids, predictions))
+        torch.save(precomputed_similarities, buffer_path)
+        logger.info(f"Saved similarities to {buffer_path}")
+
+        if with_states:
+            precomputed_states = dict(zip(guids, states))
+            torch.save(precomputed_states, buffer_path_states)
+            logger.info(f"Saved states to {buffer_path_states}")
+    else:
+        logger.info(f"Loading precomputed similarities from {buffer_path}")
+        precomputed_similarities = torch.load(buffer_path)
+
+        if with_states:
+            logger.info(f"Loading precomputed states from {buffer_path_states}")
+            precomputed_states = torch.load(buffer_path_states)
+
+    precomputed_similarities = get_query_claim_similarities(sim=precomputed_similarities, softmax=softmax)
+    return precomputed_similarities, precomputed_states
+
+
+class ZeroShotRanking(RankingMethod, ABC):
+    """Abstract base class for zero-shot methods."""
+
+    # Pre-computed representations
+    claims: Mapping[int, torch.FloatTensor]
+    premises: Mapping[str, torch.FloatTensor]
+
+    def __init__(
+        self,
+        similarity: Similarity,
+        claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
+        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
+    ):
+        """
+        Initialize the method.
+
+        :param similarity:
+            The similarity to use for the representations.
+        :param claims_path:
+            The path to the pre-computed claims representations.
+        :param premises_path:
+            The path to the pre-computed premises representations.
+        """
+        self.similarity = similarity
+
+        # Load pre-computed representations
+        self.claims = torch.load(claims_path)
+        self.premises = torch.load(premises_path)
+
+
+class ZeroShotKNN(ZeroShotRanking):
+    """Rank according to similarity of pre-trained BERT representations."""
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        # get the claim representation
+        claim_repr = self.claims[claim_id].unsqueeze(dim=0)
+        # get premise representations
+        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+        # find most similar
+        top_ids = self.similarity.sim(
+            left=claim_repr,
+            right=premise_repr,
+        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
+        # re-translate to original IDs
+        return [premise_ids[i] for i in top_ids.tolist()]
+
+
+class ZeroShotClusterKNN(ZeroShotRanking):
+    """Rank according to similarity of pre-trained BERT representations, return at most one premise for each cluster."""
+
+    def __init__(
+        self,
+        similarity: Similarity,
+        cluster_ratio: Optional[float] = 0.5,
+        claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
+        premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
+        cluster_representative: str = 'closest-to-center',
+    ):
+        """
+        Initialize the method.
+
+        :param similarity:
+            The similarity to use for the representations.
+        :param cluster_ratio: >0
+            The relative number of clusters to use. If None, use k.
+        :param claims_path:
+            The path to the pre-computed claims representations.
+        :param premises_path:
+            The path to the pre-computed premises representations.
+        :param cluster_representative:
+            The method to choose a cluster representative. From {'closest-to-center', 'closest-to-claim'}.
+        """
+        super().__init__(similarity=similarity, claims_path=claims_path, premises_path=premises_path)
+        self.ratio = cluster_ratio
+        self.cluster_representative = cluster_representative
+
+    def _get_cluster_representatives(
+        self,
+        claim_repr: torch.FloatTensor,
+        premise_repr: torch.FloatTensor,
+        assignment: torch.LongTensor,
+        centroids: torch.FloatTensor,
+    ) -> torch.LongTensor:
+        n_clusters = centroids.shape[0]
+        local_premise_ids = torch.arange(premise_repr.shape[0])
+        repr_ids = torch.full(size=(n_clusters,), fill_value=-1, dtype=torch.long)
+        for i in range(n_clusters):
+            if self.cluster_representative == 'closest-to-center':
+                anchor = centroids[i].unsqueeze(dim=0)
+            elif self.cluster_representative == 'closest-to-claim':
+                anchor = claim_repr
+            else:
+                raise NotImplementedError(self.cluster_representative)
+            mask = assignment == i
+            if not mask.any():
+                continue
+            premises_in_cluster = premise_repr[mask]
+            idx = self.similarity.sim(
+                left=anchor,
+                right=premises_in_cluster,
+            ).argmax(dim=1)[0]
+            repr_ids[i] = local_premise_ids[mask][idx]
+        return repr_ids
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        # get the claim representation
+        claim_repr = self.claims[claim_id].unsqueeze(dim=0)
+
+        # get premise representations
+        premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+        # cluster premises
+        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=len(premise_ids), k=k))
+        cluster_assignment = torch.as_tensor(algorithm.fit_predict(premise_repr.numpy()))
+        cluster_centers = torch.as_tensor(algorithm.cluster_centers_)
+
+        # choose representatives
+        cluster_repr_id = self._get_cluster_representatives(
+            claim_repr=claim_repr,
+            premise_repr=premise_repr,
+            assignment=cluster_assignment,
+            centroids=cluster_centers,
+        )
+
+        # find most similar clusters
+        non_empty_clusters = cluster_repr_id >= 0
+        top_cluster_id = self.similarity.sim(
+            left=claim_repr,
+            right=premise_repr[cluster_repr_id[non_empty_clusters]],
+        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
+
+        # re-translate to local (batch) premise ID
+        top_ids = [cluster_repr_id[non_empty_clusters][i] for i in top_cluster_id.tolist()]
+
+        # re-translate to original IDs
+        return [premise_ids[i] for i in top_ids]
+
+
 class LearnedSimilarityKNN(RankingMethod):
     """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim."""
 
@@ -307,44 +424,6 @@ class LearnedSimilarityKNN(RankingMethod):
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         return sorted(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id), reverse=True)[:k]
-
-
-def _premise_cluster_filtered(
-    premise_ids: Sequence[str],
-    premise_repr: torch.FloatTensor,
-    k: int,
-    ratio: Optional[float],
-    similarity_lookup: Callable[[str], float],
-) -> Sequence[str]:
-    """
-    Return premises sorted by similarity to claim, filtered to contain at most one element per cluster.
-
-    :param premise_ids:
-        The premise IDs.
-    :param premise_repr: shape: (num_premises, dim)
-        The corresponding representations.
-    :param k:
-        The number of premise IDs to return.
-    :param ratio:
-        The cluster ratio.
-
-    :return:
-        A list of (at most) k premise IDs.
-    """
-    num_premises = len(premise_ids)
-    # cluster premises
-    algorithm = KMeans(n_clusters=_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
-    cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
-
-    seen_clusters = set()
-    result = []
-    mapping = dict(zip(premise_ids, cluster_assignment))
-    for premise_id in sorted(premise_ids, key=similarity_lookup, reverse=True):
-        cluster_id = mapping[premise_id]
-        if cluster_id not in seen_clusters:
-            result.append(premise_id)
-        seen_clusters.add(cluster_id)
-    return result[:k]
 
 
 class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
@@ -732,86 +811,6 @@ class BiasedCoreset(BaseCoreSetRanking):
 
         # convert back to premise_ids
         return [premise_ids[i] for i in local_ids]
-
-
-def _load_or_compute_similarities(
-    cache_root: str,
-    model_path: str,
-    similarities_dir: pathlib.Path,
-    softmax: bool = True,
-    product: bool = True,
-    with_states: bool = False,
-) -> Tuple[Mapping[Tuple[str, int], float], Optional[]]:
-    """
-    Load the predicted similarities for all possible (premise_id, claim_id) pairs.
-
-    :param cache_root:
-        The cache root.
-    :param model_path:
-        The model path.
-    :param similarities_dir:
-        The similarities directory.
-
-    :return:
-        A mapping (premise_id, claim_id) -> similarity.
-    """
-    if product:
-        buffer_path = similarities_dir / PREP_TEST_PRODUCT_SIMILARITIES
-    else:
-        buffer_path = similarities_dir / PREP_TEST_SIMILARITIES
-    buffer_path_states = precomputed_states = None
-    if with_states:
-        if product:
-            raise NotImplementedError
-        buffer_path_states = similarities_dir / PREP_TEST_STATES
-
-    if not buffer_path.is_file() or (with_states and not buffer_path_states.is_file()):
-        logger.info("Computing similarities")
-
-        # load bert model and the data
-        logger.info("Load data")
-        batch_size = 120
-        loader, data, model, guids = load_bert_model_and_data_no_args(
-            model_path=model_path,
-            task_name="SIM",
-            batch_size=batch_size,
-            data_dir=PREP_ASSIGNMENTS_TEST,
-            overwrite_cache=True,
-            max_seq_length=512,
-            model_type="bert",
-            cache_root=cache_root,
-            product=False
-        )
-
-        # generate logits for all claims-premise pairs
-        logger.info("Run inference")
-        predictions, states = inference_no_args(
-            data=data,
-            loader=loader,
-            logger=logger,
-            model=model,
-            batch_size=batch_size,
-        )
-
-        # save artifact
-        precomputed_similarities = dict(zip(guids, predictions))
-        torch.save(precomputed_similarities, buffer_path)
-        logger.info(f"Saved similarities to {buffer_path}")
-
-        if with_states:
-            precomputed_states = dict(zip(guids, states))
-            torch.save(precomputed_states, buffer_path_states)
-            logger.info(f"Saved states to {buffer_path_states}")
-    else:
-        logger.info(f"Loading precomputed similarities from {buffer_path}")
-        precomputed_similarities = torch.load(buffer_path)
-
-        if with_states:
-            logger.info(f"Loading precomputed states from {buffer_path_states}")
-            precomputed_states = torch.load(buffer_path_states)
-
-    precomputed_similarities = get_query_claim_similarities(sim=precomputed_similarities, softmax=softmax)
-    return precomputed_similarities, precomputed_states
 
 
 class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityKNN):
