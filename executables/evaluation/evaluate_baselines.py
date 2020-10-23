@@ -160,6 +160,7 @@ def main():
 
         # Save result
         result_df.to_csv(output_path, index=False, sep='\t')
+        mlflow.end_run()
 
     # Collate results
     files = list(output_root.glob('*.tsv'))
