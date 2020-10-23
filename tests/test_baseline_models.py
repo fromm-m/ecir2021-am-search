@@ -13,7 +13,7 @@ import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.baselines import Coreset, ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
+from arclus.models.baselines import BiasedCoreset, Coreset, ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
 from arclus.similarity import CosineSimilarity, LpSimilarity
 
 
@@ -261,6 +261,34 @@ class CoreSetTests(RankingTests, unittest.TestCase):
 
         self.instance.__dict__["premise_premise_similarity"] = CosineSimilarity()
         self.instance.__dict__["threshold"] = None
+        self.instance.__dict__["debug"] = False
+
+    def test_get_baseline_method_by_name(self):
+        raise SkipTest("Expensive initialization")
+
+
+class BiasCoreSetTests(RankingTests, unittest.TestCase):
+    """Test for BiasedCoreSet ranking method."""
+
+    cls = BiasedCoreset
+
+    def setUp(self):  # noqa: D102
+        # mock
+        self.kwargs = self.kwargs or {}
+        self.kwargs = self._pre_instantiation_hook(kwargs=self.kwargs)
+        self.instance = self.cls.__new__(self.cls)
+
+        # mock
+        fake_similarities = defaultdict(lambda: random.random())
+        self.instance.__dict__["precomputed_similarities"] = fake_similarities
+
+        fake_states = defaultdict(lambda: torch.rand(self.dim))
+        self.instance.__dict__["precomputed_states"] = fake_states
+
+        self.instance.__dict__["premise_premise_similarity"] = CosineSimilarity()
+        self.instance.__dict__["alpha"] = None
+        self.instance.__dict__["resolution"] = 10
+        self.instance.__dict__["debug"] = False
 
     def test_get_baseline_method_by_name(self):
         raise SkipTest("Expensive initialization")
