@@ -152,7 +152,10 @@ def main():
 
         # Evaluate method
         result_df = evaluate_ranking_method(method=method, k=args.k)
-        mlflow.log_metric(key="mndcg", value=result_df["mnDCG"].mean())
+        mlflow.log_metrics(metrics={
+            f"mnDCG@{k}": mndcg
+            for k, mndcg in result_df.groupby(by="k").agg(mnDCG="mean").tolist()
+        })
 
         # Add configuration
         for key, value in config.items():
