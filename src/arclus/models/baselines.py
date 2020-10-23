@@ -97,18 +97,15 @@ def get_premise_representations(
     )
 
     # convert to tensor, shape: (num_premises, num_claims, 2)
-    sim = torch.stack(
-        tensors=[
-            torch.stack(
-                tensors=[
-                    torch.as_tensor(data=sim[premise_id, claim_id], dtype=torch.float32)
-                    for claim_id in claim_ids
-                ],
-                dim=0,
-            )
+    sim = torch.as_tensor(
+        data=[
+            [
+                sim[premise_id, claim_id]
+                for claim_id in claim_ids
+            ]
             for premise_id in premise_ids
         ],
-        dim=0,
+        dtype=torch.float32,
     )
     assert sim.shape == (len(premise_ids), len(claim_ids), 2)
 
