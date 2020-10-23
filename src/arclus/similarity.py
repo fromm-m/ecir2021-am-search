@@ -29,12 +29,18 @@ class LpSimilarity(Similarity):
         # change distance to similarity
         return 1 / (1 + torch.cdist(claims, premises, p=self.p))
 
+    def __str__(self) -> str:
+        return f"l{self.p}"
+
 
 class CosineSimilarity(Similarity):
     """Cosine similarity."""
 
     def sim(self, claims: torch.Tensor, premises: torch.Tensor) -> torch.Tensor:  # noqa: D102
         return functional.normalize(claims, p=2, dim=-1) @ functional.normalize(premises, p=2, dim=-1).t()
+
+    def __str__(self) -> str:
+        return "cos"
 
 
 def _mean_top_sim(sim: torch.Tensor, k: int, dim: int) -> torch.Tensor:
