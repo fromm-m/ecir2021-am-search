@@ -65,8 +65,8 @@ class ZeroShotKNN(ZeroShotRanking):
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
         # find most similar
         top_ids = self.similarity.sim(
-            claims=claim_repr,
-            premises=premise_repr,
+            left=claim_repr,
+            right=premise_repr,
         ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
         # re-translate to original IDs
         return [premise_ids[i] for i in top_ids.tolist()]
@@ -132,8 +132,8 @@ class ZeroShotClusterKNN(ZeroShotRanking):
                 continue
             premises_in_cluster = premise_repr[mask]
             idx = self.similarity.sim(
-                claims=anchor,
-                premises=premises_in_cluster,
+                left=anchor,
+                right=premises_in_cluster,
             ).argmax(dim=1)[0]
             repr_ids[i] = local_premise_ids[mask][idx]
         return repr_ids
@@ -160,8 +160,8 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         # find most similar clusters
         non_empty_clusters = cluster_repr_id >= 0
         top_cluster_id = self.similarity.sim(
-            claims=claim_repr,
-            premises=premise_repr[cluster_repr_id[non_empty_clusters]],
+            left=claim_repr,
+            right=premise_repr[cluster_repr_id[non_empty_clusters]],
         ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
 
         # re-translate to local (batch) premise ID
