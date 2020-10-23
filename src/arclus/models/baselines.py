@@ -508,12 +508,17 @@ def core_set(
     for i in range(1, k):
         # select similarity from candidates to chosen, shape: (num_cand, num_chosen)
         score = similarity[chosen_mask].t()[~chosen_mask]
-        # largest similarity to chosen, shape: (num_cand), smallest similarity
+
+        # largest similarity to chosen, shape: (num_cand)
         candidate_score = score.max(dim=-1).values
+
         # apply bias
         if premise_bias is not None:
             candidate_score = candidate_score - premise_bias[~chosen_mask]
+
+        # choose highest score
         local_next_id = candidate_score.argmin()
+
         # convert to global id
         next_id = torch.arange(n, device=similarity.device)[~chosen_mask][local_next_id].item()
 
