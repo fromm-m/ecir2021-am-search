@@ -6,6 +6,8 @@ from logging import Logger
 from operator import itemgetter
 from typing import Mapping, Optional, Sequence, Tuple
 from pathlib import Path
+
+import pandas
 import torch
 from sklearn.cluster import KMeans
 
@@ -489,6 +491,13 @@ class Coreset(LearnedSimilarityKNN):
         """
         super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
         self.threshold = relevance_threshold
+
+    def fit(
+        self,
+        training_data: pandas.DataFrame,
+        k: int,
+    ):
+        raise NotImplementedError
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         def lookup_similarity(premise_id: str) -> float:
