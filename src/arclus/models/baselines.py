@@ -323,7 +323,7 @@ class LearnedSimilarityKNN(RankingMethod):
         softmax: bool,
         model_path: str,
         similarities_dir: str,
-        cache_root: str = '/tmp/arclus/bert',
+        cache_root: Optional[str] = None,
     ):
         """
         Initialize the method.
@@ -335,6 +335,8 @@ class LearnedSimilarityKNN(RankingMethod):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
+        if cache_root is None:
+            cache_root = '/tmp/arclus/bert'
         buffer_path_sim = similarities_dir / PREP_TEST_SIMILARITIES
         buffer_path_states = similarities_dir / PREP_TEST_STATES
         logger.info(f'Using softmax: {softmax}')
@@ -441,7 +443,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         softmax: bool,
         model_path: str,
         similarities_dir: str,
-        cache_root: str = '/tmp/arclus/bert',
+        cache_root: Optional[str] = None,
     ):
         """
         Initialize the method.
@@ -457,8 +459,12 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityKNN):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        super().__init__(model_path=model_path, cache_root=cache_root, softmax=softmax,
-                         similarities_dir=similarities_dir)
+        super().__init__(
+            softmax=softmax,
+            model_path=model_path,
+            similarities_dir=similarities_dir,
+            cache_root=cache_root,
+        )
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
@@ -531,7 +537,31 @@ def core_set(
     return result
 
 
-class Coreset(LearnedSimilarityKNN):
+class BaseCoreSetRanking(LearnedSimilarityKNN):
+    def __init__(
+        self,
+        model_path: str,
+        similarities_dir: str,
+        premise_premise_similarity: Similarity = CosineSimilarity(),
+        cache_root: Optional[str] = None,
+        debug: bool = False,
+    ):
+        """
+        Initialize the method.
+
+        :param model_path:
+            Directory where the fine-tuned bert similarity model checkpoint is located.
+        :param cache_root:
+            The directory where temporary BERT inference files are stored.
+        """
+        super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
+        if isinstance(premise_premise_similarity, str):
+            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
+        self.premise_premise_similarity = premise_premise_similarity
+        self.debug = debug
+
+
+class Coreset(BaseCoreSetRanking):
 
     def __init__(
         self,
@@ -550,12 +580,14 @@ class Coreset(LearnedSimilarityKNN):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
+        super().__init__(
+            model_path=model_path,
+            similarities_dir=similarities_dir,
+            premise_premise_similarity=premise_premise_similarity,
+            cache_root=cache_root,
+            debug=debug,
+        )
         self.threshold = None
-        if isinstance(premise_premise_similarity, str):
-            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
-        self.premise_premise_similarity = premise_premise_similarity
-        self.debug = debug
         self.fill_to_k = fill_to_k
 
     def fit(
@@ -683,7 +715,7 @@ class Coreset(LearnedSimilarityKNN):
         return chosen
 
 
-class BiasedCoreset(LearnedSimilarityKNN):
+class BiasedCoreset(BaseCoreSetRanking):
     """Convex combination of coreset score and similarity to query."""
 
     def __init__(
@@ -691,7 +723,7 @@ class BiasedCoreset(LearnedSimilarityKNN):
         model_path: str,
         similarities_dir: str,
         premise_premise_similarity: Similarity = CosineSimilarity(),
-        cache_root: str = '/nfs/data3/obermeier/arclus/temp/',
+        cache_root: Optional[str] = None,
         debug: bool = False,
         resolution: int = 10,
     ):
@@ -703,12 +735,14 @@ class BiasedCoreset(LearnedSimilarityKNN):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
+        super().__init__(
+            model_path=model_path,
+            similarities_dir=similarities_dir,
+            premise_premise_similarity=premise_premise_similarity,
+            cache_root=cache_root,
+            debug=debug,
+        )
         self.alpha = None
-        if isinstance(premise_premise_similarity, str):
-            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
-        self.premise_premise_similarity = premise_premise_similarity
-        self.debug = debug
         self.resolution = resolution
 
     def fit(
