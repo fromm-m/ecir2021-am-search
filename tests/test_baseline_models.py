@@ -5,12 +5,39 @@ import tempfile
 import unittest
 from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Type
 
+import numpy
+import pandas
 import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
 from arclus.models.baselines import ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
 from arclus.similarity import LpSimilarity
+
+
+def _generate_random_data(
+    num_claims: int,
+    premise_ids: Sequence[str],
+    max_premises: int,
+    min_premises: int,
+    num_clusters: int,
+) -> pandas.DataFrame:
+    data = []
+    for claim in range(num_claims):
+        num = random.randrange(min_premises, max_premises)
+        premises = random.sample(premise_ids, num)
+        relevance = numpy.random.randint(3, size=num)
+        clusters = numpy.random.randint(num_clusters, size=num)
+        claims = [claim] * num
+        data.extend(zip(claims, premises, relevance, clusters))
+    return pandas.DataFrame(
+        data=data,
+        columns=[
+            "claim_id",
+            "premise_id",
+            "relevance",
+            "premiseClusterID_groundTruth",
+        ])
 
 
 class RankingTests:
@@ -35,6 +62,23 @@ class RankingTests:
         """Prepare instantiation."""
         self.all_premise_ids = [c for c in string.ascii_letters[:self.num_premises]]
         return kwargs
+
+    def test_fit(self):
+        """Test fit."""
+        num_clusters = 3
+        min_premises = 3
+        max_premises = self.num_premises // 2
+        training_data = _generate_random_data(
+            num_claims=self.num_claims,
+            premise_ids=self.all_premise_ids,
+            max_premises=max_premises,
+            min_premises=min_premises,
+            num_clusters=num_clusters,
+        )
+        self.instance.fit(
+            training_data=training_data,
+            k=self.k,
+        )
 
     def test_rank(self):
         """Test rank."""
