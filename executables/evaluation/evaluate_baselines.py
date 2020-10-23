@@ -108,7 +108,6 @@ def main():
                       debug=True,
                   )
                   for similarity in ('l2', 'l1', 'cos')
-
               ]
 
     # filter configurations based on keywords
