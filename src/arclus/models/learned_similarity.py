@@ -59,10 +59,10 @@ def get_query_claim_similarities(
     return dict(zip(pairs, sim))
 
 
-def get_premise_representations(
+def get_claim_similarity_premise_representations(
     sim: Mapping[Tuple[float, int], torch.FloatTensor],
     softmax: bool,
-) -> Mapping[str, torch.FloatTensor]:
+) -> Mapping[Tuple[float, int], torch.FloatTensor]:
     """
     Construct premise representations as similarity vectors to claims.
 
@@ -72,7 +72,7 @@ def get_premise_representations(
         Whether to apply softmax or use raw logits.
 
     :return:
-        A mapping from premise_id to a vector of similarities, shape: (num_claims,).
+        A mapping from (claim_id, premise_id) to a vector of similarities, shape: (num_claims,).
     """
     # verify that similarities are available for all claim, premise pairs
     premise_ids, claim_ids = [
@@ -320,8 +320,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
                 product=True,
                 with_states=False,
             )
-            # TODO: Add claim to keys
-            self.premise_representations = get_premise_representations(
+            self.premise_representations = get_claim_similarity_premise_representations(
                 sim=sim,
                 softmax=premise_representation_kwargs.get("softmax", True)
             )
@@ -481,7 +480,7 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
             cache_root=cache_root,
             softmax=True,
             similarities_dir=similarities_dir,
-            with_states=premise_representation == PremiseRepresentationEnum.learned_similarity_last_layer,
+            premise_representation=premise_representation,
         )
         if isinstance(premise_premise_similarity, str):
             premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)

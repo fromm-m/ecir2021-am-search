@@ -13,7 +13,7 @@ import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.learned_similarity import BiasedCoreset, Coreset, core_set, get_premise_representations, get_query_claim_similarities
+from arclus.models.learned_similarity import BiasedCoreset, Coreset, core_set, get_claim_similarity_premise_representations, get_query_claim_similarities
 from arclus.models.zero_shot import ZeroShotClusterKNN, ZeroShotKNN
 from arclus.similarity import CosineSimilarity, LpSimilarity
 
@@ -197,7 +197,7 @@ def test_get_premise_representations():
         for claim_id in range(num_claims)
     }
     for softmax in (False, True):
-        sim = get_premise_representations(
+        sim = get_claim_similarity_premise_representations(
             sim=old_sim,
             softmax=softmax,
         )
