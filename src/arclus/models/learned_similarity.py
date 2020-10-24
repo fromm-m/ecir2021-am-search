@@ -4,7 +4,7 @@ import pathlib
 from abc import ABC
 from collections import defaultdict
 from operator import itemgetter
-from typing import Callable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 
 import numpy
 import pandas
@@ -13,7 +13,7 @@ from sklearn.cluster import KMeans
 
 from .base import RankingMethod
 from ..evaluation import mndcg_score
-from ..settings import PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
+from ..settings import PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
 from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
 from ..utils import resolve_num_clusters
 from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
@@ -287,6 +287,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
         similarities_dir: str,
         cache_root: Optional[str] = None,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
+        premise_representation_kwargs: Optional[Mapping[str, Any]] = None,
     ):
         """
         Initialize the method.
@@ -308,7 +309,28 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
             product=False,
             with_states=premise_representation == PremiseRepresentationEnum.learned_similarity_last_layer,
         )
-        if premise_representation != PremiseRepresentationEnum.learned_similarity_last_layer:
+        if premise_representation_kwargs is None:
+            premise_representation_kwargs = dict()
+        if premise_representation == PremiseRepresentationEnum.learned_similarity_claim_similarities:
+            sim = _load_or_compute_similarities(
+                cache_root=cache_root,
+                model_path=model_path,
+                similarities_dir=similarities_dir,
+                softmax=softmax,
+                product=True,
+                with_states=False,
+            )
+            self.premise_representations = get_premise_representations(
+                sim=sim,
+                softmax=premise_representation_kwargs.get("softmax", True)
+            )
+        elif premise_representation == PremiseRepresentationEnum.zero_shot_bert:
+            self.premises_representations = torch.load(PREMISES_TEST_FEATURES)
+        elif premise_representation == PremiseRepresentationEnum.learned_similarity_last_layer:
+            assert self.premise_representations is not None
+        elif premise_representation == PremiseRepresentationEnum.none:
+            assert self.premise_representations is None
+        else:
             raise NotImplementedError
 
     def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
