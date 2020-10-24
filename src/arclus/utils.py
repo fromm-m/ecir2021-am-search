@@ -181,3 +181,12 @@ def generate_random_words(num_words, max_word_length: int = 10) -> List[str]:
 def argparse_bool(x):
     """Convert a command line arguments for a boolean value."""
     return str(x).lower() in {'true', '1', 'yes'}
+
+
+def resolve_num_clusters(ratio: Optional[float], num_premises: int, k: int) -> int:
+    if ratio is None:
+        return k
+    n_clusters = int(round(ratio * num_premises))
+    n_clusters = max(n_clusters, k)
+    n_clusters = min(n_clusters, num_premises)
+    return n_clusters

@@ -1,3 +1,4 @@
+import logging
 import pathlib
 from abc import ABC
 from collections import defaultdict
@@ -9,21 +10,14 @@ import pandas
 import torch
 from sklearn.cluster import KMeans
 
-from arclus.evaluation import mndcg_score
-from arclus.models import RankingMethod
-from arclus.models.zero_shot import logger
-from arclus.settings import PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
-from arclus.similarity import CosineSimilarity, Similarity, get_similarity_by_name
-from arclus.utils_am import inference_no_args, load_bert_model_and_data_no_args
+from .base import RankingMethod
+from ..evaluation import mndcg_score
+from ..settings import PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
+from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
+from ..utils import resolve_num_clusters
+from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
-
-def _num_clusters(ratio: Optional[float], num_premises: int, k: int) -> int:
-    if ratio is None:
-        return k
-    n_clusters = int(round(ratio * num_premises))
-    n_clusters = max(n_clusters, k)
-    n_clusters = min(n_clusters, num_premises)
-    return n_clusters
+logger = logging.getLogger(__name__)
 
 
 def get_query_claim_similarities(
@@ -138,7 +132,7 @@ def _premise_cluster_filtered(
     """
     num_premises = len(premise_ids)
     # cluster premises
-    algorithm = KMeans(n_clusters=_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
+    algorithm = KMeans(n_clusters=resolve_num_clusters(ratio=ratio, num_premises=num_premises, k=k))
     cluster_assignment = algorithm.fit_predict(premise_repr.numpy()).tolist()
 
     seen_clusters = set()

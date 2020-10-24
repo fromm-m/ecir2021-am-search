@@ -9,11 +9,11 @@ import torch
 from sklearn.cluster import KMeans
 
 from .base import RankingMethod
-from .learned_similarity import _num_clusters
 from ..settings import (
     CLAIMS_TEST_FEATURES, PREMISES_TEST_FEATURES,
 )
 from ..similarity import Similarity
+from ..utils import resolve_num_clusters
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         # get premise representations
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
         # cluster premises
-        algorithm = KMeans(n_clusters=_num_clusters(ratio=self.ratio, num_premises=len(premise_ids), k=k))
+        algorithm = KMeans(n_clusters=resolve_num_clusters(ratio=self.ratio, num_premises=len(premise_ids), k=k))
         cluster_assignment = torch.as_tensor(algorithm.fit_predict(premise_repr.numpy()))
         cluster_centers = torch.as_tensor(algorithm.cluster_centers_)
 
