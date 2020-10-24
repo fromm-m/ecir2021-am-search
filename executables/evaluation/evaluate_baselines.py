@@ -12,6 +12,7 @@ import pandas
 import tqdm
 
 from arclus.models import get_baseline_method_by_name
+from arclus.models.learned_similarity import PremiseRepresentationEnum
 from arclus.pipeline import evaluate_ranking_method
 from arclus.settings import DATA_ROOT
 from arclus.similarity import get_similarity_by_name
@@ -32,6 +33,10 @@ def main():
     args = parser.parse_args()
     similarities = DATA_ROOT / 'similarities'
     model_path = '/nfs/data3/fromm/argument_clustering/models/c26817b78afc4e95ab86793d7390081b'
+    PREMISE_REPRESENTATIONS = [
+        PremiseRepresentationEnum.learned_similarity_last_layer,
+        PremiseRepresentationEnum.learned_similarity_claim_similarities,
+    ]
     configs = [
                   # 0. Related Work: Dumani
                   dict(
@@ -98,9 +103,11 @@ def main():
                       model_path=model_path,
                       debug=True,
                       fill_to_k=fill_to_k,
+                      premise_representation=premise_representation,
                   )
                   for similarity in ('l2', 'l1', 'cos')
                   for fill_to_k in (False, True)
+                  for premise_representation in PREMISE_REPRESENTATIONS
               ] + [
                   # Biased Coreset
                   dict(
@@ -110,8 +117,10 @@ def main():
                       model_path=model_path,
                       debug=True,
                       resolution=50,
+                      premise_representation=premise_representation,
                   )
                   for similarity in ('l2', 'l1', 'cos')
+                  for premise_representation in PREMISE_REPRESENTATIONS
               ]
 
     # filter configurations based on keywords
