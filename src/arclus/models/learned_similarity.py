@@ -483,10 +483,6 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
             similarities_dir=similarities_dir,
             with_states=premise_representation == PremiseRepresentationEnum.learned_similarity_last_layer,
         )
-        if premise_representation == PremiseRepresentationEnum.learned_similarity_claim_similarities:
-            raise NotImplementedError
-        else:
-            assert premise_representation == "last_layer"
         if isinstance(premise_premise_similarity, str):
             premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
         self.premise_premise_similarity = premise_premise_similarity
