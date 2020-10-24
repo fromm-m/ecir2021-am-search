@@ -191,17 +191,20 @@ def test_get_premise_representations():
     num_premises = 7
     num_claims = 5
     premise_ids = list(map(str, range(num_premises)))
+    claim_ids = range(num_claims)
     old_sim = {
         (premise_id, claim_id): 10.0 * torch.rand(2, )
         for premise_id in premise_ids
-        for claim_id in range(num_claims)
+        for claim_id in claim_ids
     }
+    premise_to_query_claim = dict(old_sim.keys())
     for softmax in (False, True):
         sim = get_claim_similarity_premise_representations(
             sim=old_sim,
             softmax=softmax,
+            premise_to_query_claim=premise_to_query_claim,
         )
-        assert set(sim.keys()) == set(premise_ids)
+        assert set(sim.keys()) == set((pid, premise_to_query_claim[pid]) for pid in premise_ids)
         for v in sim.values():
             assert torch.is_tensor(v)
             assert v.dtype == torch.float32
