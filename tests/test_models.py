@@ -259,7 +259,7 @@ class PrecomputedSimilarityDependentTests(RankingTests):
         self.instance.__dict__["precomputed_similarities"] = fake_similarities
 
         fake_states = defaultdict(lambda: torch.rand(self.dim))
-        self.instance.__dict__["precomputed_states"] = fake_states
+        self.instance.__dict__["premise_representations"] = fake_states
 
         for key, value in self.kwargs.items():
             self.instance.__dict__[key] = value
