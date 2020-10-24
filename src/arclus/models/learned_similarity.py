@@ -4,7 +4,7 @@ import pathlib
 from abc import ABC
 from collections import defaultdict
 from operator import itemgetter
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy
 import pandas
@@ -60,9 +60,10 @@ def get_query_claim_similarities(
 
 
 def get_claim_similarity_premise_representations(
-    sim: Mapping[Tuple[float, int], torch.FloatTensor],
+    sim: Mapping[Tuple[str, int], Union[torch.FloatTensor, float]],
     softmax: bool,
-) -> Mapping[Tuple[float, int], torch.FloatTensor]:
+    premise_to_query_claim: Mapping[str, int],
+) -> Mapping[Tuple[str, int], torch.FloatTensor]:
     """
     Construct premise representations as similarity vectors to claims.
 
@@ -70,6 +71,8 @@ def get_claim_similarity_premise_representations(
         The similarities for (premise_id, claim_id) pairs.
     :param softmax
         Whether to apply softmax or use raw logits.
+    :param premise_to_query_claim:
+        A mapping from premise IDs to the query claim ID.
 
     :return:
         A mapping from (claim_id, premise_id) to a vector of similarities, shape: (num_claims,).
@@ -106,7 +109,15 @@ def get_claim_similarity_premise_representations(
     sim = sim[:, :, 1]
 
     # one row corresponds to one premise representation
-    return dict(zip(premise_ids, sim))
+    result = dict(zip(premise_ids, sim))
+
+    # add query claim to key
+    result = {
+        (pid, premise_to_query_claim[pid]): vec
+        for pid, vec in result.items()
+    }
+
+    return result
 
 
 def _premise_cluster_filtered(
@@ -312,17 +323,20 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
         if premise_representation_kwargs is None:
             premise_representation_kwargs = dict()
         if premise_representation == PremiseRepresentationEnum.learned_similarity_claim_similarities:
-            sim = _load_or_compute_similarities(
-                cache_root=cache_root,
-                model_path=model_path,
-                similarities_dir=similarities_dir,
-                softmax=softmax,
-                product=True,
-                with_states=False,
-            )
             self.premise_representations = get_claim_similarity_premise_representations(
-                sim=sim,
-                softmax=premise_representation_kwargs.get("softmax", True)
+                sim=_load_or_compute_similarities(
+                    cache_root=cache_root,
+                    model_path=model_path,
+                    similarities_dir=similarities_dir,
+                    softmax=softmax,
+                    product=True,
+                    with_states=False,
+                )[0],
+                softmax=premise_representation_kwargs.get("softmax", True),
+                premise_to_query_claim={
+                    pid: cid
+                    for pid, cid in self.precomputed_similarities.keys()
+                },
             )
         elif premise_representation == PremiseRepresentationEnum.zero_shot_bert:
             self.premises_representations = torch.load(PREMISES_TEST_FEATURES)
