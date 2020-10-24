@@ -685,6 +685,7 @@ class BiasedCoreset(BaseCoreSetRanking):
         cache_root: Optional[str] = None,
         debug: bool = False,
         resolution: int = 10,
+        premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
         Initialize the method.
@@ -700,6 +701,7 @@ class BiasedCoreset(BaseCoreSetRanking):
             premise_premise_similarity=premise_premise_similarity,
             cache_root=cache_root,
             debug=debug,
+            premise_representation=premise_representation,
         )
         self.alpha = None
         self.resolution = resolution
