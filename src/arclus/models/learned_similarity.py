@@ -1,3 +1,4 @@
+import enum
 import logging
 import pathlib
 from abc import ABC
@@ -254,6 +255,22 @@ def get_premise_representations_for_claim(
     )
 
 
+class PremiseRepresentationEnum(str, enum.Enum):
+    """Enum for premise representation options."""
+
+    #: Do not use premise representations
+    none = "none"
+
+    #: Use pre-trained BERT representations
+    zero_shot_bert = "zero_shot_bert"
+
+    #: Use the hidden states of the learned similarity model.
+    learned_similarity_last_layer = "learned_similarity_last_layer"
+
+    #: Use a vector of claim similarities
+    learned_similarity_claim_similarities = "learned_similarity_claim_similarities"
+
+
 class LearnedSimilarityBasedMethod(RankingMethod, ABC):
     """Base class for ranking methods based on learned similarity between claims and premises."""
 
@@ -261,7 +278,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
     precomputed_similarities: Mapping[Tuple[str, int], float]
 
     #: The precomputed representations
-    precomputed_states: Optional[Mapping[Tuple[str, int], torch.FloatTensor]]
+    premise_representations: Optional[Mapping[Tuple[str, int], torch.FloatTensor]]
 
     def __init__(
         self,
@@ -269,7 +286,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
         model_path: str,
         similarities_dir: str,
         cache_root: Optional[str] = None,
-        with_states: bool = True,
+        premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
         Initialize the method.
@@ -283,14 +300,16 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
         """
         if cache_root is None:
             cache_root = '/tmp/arclus/bert'
-        self.precomputed_similarities, self.precomputed_states = _load_or_compute_similarities(
+        self.precomputed_similarities, self.premise_representations = _load_or_compute_similarities(
             cache_root=cache_root,
             model_path=model_path,
             similarities_dir=similarities_dir,
             softmax=softmax,
             product=False,
-            with_states=with_states,
+            with_states=premise_representation == PremiseRepresentationEnum.learned_similarity_last_layer,
         )
+        if premise_representation != PremiseRepresentationEnum.learned_similarity_last_layer:
+            raise NotImplementedError
 
     def similarity_lookup(self, for_claim_id: int) -> Callable[[str], float]:
         """Create a similarity lookup for premises, with a fixed claim."""
@@ -346,7 +365,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
             premise_repr=get_premise_representations_for_claim(
                 claim_id=claim_id,
                 premise_ids=premise_ids,
-                source=self.precomputed_states,
+                source=self.premise_representations,
             ),
             k=k,
             ratio=self.ratio,
@@ -420,6 +439,7 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         premise_premise_similarity: Similarity = CosineSimilarity(),
         cache_root: Optional[str] = None,
         debug: bool = False,
+        premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
         Initialize the method.
@@ -433,7 +453,17 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         :param debug:
             Whether to store fit artifacts for further inspection.
         """
-        super().__init__(model_path=model_path, cache_root=cache_root, softmax=True, similarities_dir=similarities_dir)
+        super().__init__(
+            model_path=model_path,
+            cache_root=cache_root,
+            softmax=True,
+            similarities_dir=similarities_dir,
+            with_states=premise_representation == PremiseRepresentationEnum.learned_similarity_last_layer,
+        )
+        if premise_representation == PremiseRepresentationEnum.learned_similarity_claim_similarities:
+            raise NotImplementedError
+        else:
+            assert premise_representation == "last_layer"
         if isinstance(premise_premise_similarity, str):
             premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
         self.premise_premise_similarity = premise_premise_similarity
@@ -463,7 +493,7 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         premise_repr = get_premise_representations_for_claim(
             claim_id=claim_id,
             premise_ids=premise_ids,
-            source=self.precomputed_states,
+            source=self.premise_representations,
         )
 
         # compute pair-wise similarity matrix
