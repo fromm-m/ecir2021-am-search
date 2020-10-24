@@ -13,7 +13,8 @@ import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.baselines import BiasedCoreset, Coreset, ZeroShotClusterKNN, ZeroShotKNN, core_set, get_premise_representations, get_query_claim_similarities
+from arclus.models.zero_shot import ZeroShotClusterKNN, ZeroShotKNN
+from arclus.models.learned_similarity import BiasedCoreset, Coreset, core_set, get_premise_representations, get_query_claim_similarities
 from arclus.similarity import CosineSimilarity, LpSimilarity
 
 
