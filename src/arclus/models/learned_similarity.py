@@ -532,6 +532,7 @@ class Coreset(BaseCoreSetRanking):
         cache_root: Optional[str] = None,
         debug: bool = False,
         fill_to_k: bool = False,
+        premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
         Initialize the method.
@@ -550,6 +551,7 @@ class Coreset(BaseCoreSetRanking):
             premise_premise_similarity=premise_premise_similarity,
             cache_root=cache_root,
             debug=debug,
+            premise_representation=premise_representation,
         )
         self.threshold = None
         self.fill_to_k = fill_to_k
