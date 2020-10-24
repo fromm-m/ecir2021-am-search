@@ -320,6 +320,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
                 product=True,
                 with_states=False,
             )
+            # TODO: Add claim to keys
             self.premise_representations = get_premise_representations(
                 sim=sim,
                 softmax=premise_representation_kwargs.get("softmax", True)
@@ -787,17 +788,8 @@ class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityBasedMethod):
             model_path=model_path,
             similarities_dir=similarities_dir,
             cache_root=cache_root,
-            with_states=False,
+            premise_representation=PremiseRepresentationEnum.learned_similarity_claim_similarities,
         )
-        sim_premise_to_all_claims = _load_or_compute_similarities(
-            cache_root=cache_root,
-            model_path=model_path,
-            similarities_dir=similarities_dir,
-            softmax=softmax,
-            product=True,
-            with_states=False,
-        )[0]
-        self.premise_representations = get_premise_representations(sim=sim_premise_to_all_claims, softmax=softmax)
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
