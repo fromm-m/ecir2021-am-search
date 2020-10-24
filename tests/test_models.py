@@ -13,8 +13,8 @@ import torch
 
 from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.zero_shot import ZeroShotClusterKNN, ZeroShotKNN
 from arclus.models.learned_similarity import BiasedCoreset, Coreset, core_set, get_premise_representations, get_query_claim_similarities
+from arclus.models.zero_shot import ZeroShotClusterKNN, ZeroShotKNN
 from arclus.similarity import CosineSimilarity, LpSimilarity
 
 
@@ -277,6 +277,7 @@ class CoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
     kwargs = dict(
         premise_premise_similarity=CosineSimilarity(),
         debug=False,
+        fill_to_k=True,
     )
 
     def _post_fake_instantiation_hook(self):  # noqa: D102

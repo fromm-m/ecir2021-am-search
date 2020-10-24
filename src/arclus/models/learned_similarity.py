@@ -59,7 +59,7 @@ def get_query_claim_similarities(
 
 
 def get_premise_representations(
-    sim: Mapping[Tuple[float, int], float],
+    sim: Mapping[Tuple[float, int], torch.FloatTensor],
     softmax: bool,
 ) -> Mapping[str, torch.FloatTensor]:
     """
@@ -88,7 +88,7 @@ def get_premise_representations(
     sim = torch.as_tensor(
         data=[
             [
-                sim[premise_id, claim_id]
+                sim[premise_id, claim_id].tolist()
                 for claim_id in claim_ids
             ]
             for premise_id in premise_ids
@@ -582,7 +582,13 @@ class Coreset(BaseCoreSetRanking):
         if self.threshold is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
-        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, threshold=self.threshold, fill_to_k=self.fill_to_k)
+        return self._rank(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
+            k=k,
+            threshold=self.threshold,
+            fill_to_k=self.fill_to_k,
+        )
 
     def _rank(self, claim_id, premise_ids, k, threshold: float, fill_to_k: bool) -> Sequence[str]:
         # filter premise IDs
