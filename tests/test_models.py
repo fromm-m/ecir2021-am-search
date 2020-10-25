@@ -193,23 +193,20 @@ def test_get_premise_representations():
     premise_ids = list(map(str, range(num_premises)))
     claim_ids = range(num_claims)
     old_sim = {
-        (premise_id, claim_id): 10.0 * torch.rand(2, )
+        (premise_id, claim_id): 10.0 * torch.rand(1,)
         for premise_id in premise_ids
         for claim_id in claim_ids
     }
-    premise_to_query_claim = dict(old_sim.keys())
-    for softmax in (False, True):
-        sim = get_claim_similarity_premise_representations(
-            sim=old_sim,
-            premise_to_query_claim=premise_to_query_claim,
-        )
-        assert set(sim.keys()) == set((pid, premise_to_query_claim[pid]) for pid in premise_ids)
-        for v in sim.values():
-            assert torch.is_tensor(v)
-            assert v.dtype == torch.float32
-            assert v.shape == (num_claims,)
-            if softmax:
-                assert (v >= 0).all() and (v <= 1).all()
+    premise_to_query_claim = old_sim.keys()
+    sim = get_claim_similarity_premise_representations(
+        sim=old_sim,
+        premise_to_query_claim=premise_to_query_claim,
+    )
+    assert set(sim.keys()) == set(premise_to_query_claim)
+    for v in sim.values():
+        assert torch.is_tensor(v)
+        assert v.dtype == torch.float32
+        assert v.shape == (num_claims,)
 
 
 class CoreSetUtilityTests(unittest.TestCase):
