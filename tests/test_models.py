@@ -201,7 +201,6 @@ def test_get_premise_representations():
     for softmax in (False, True):
         sim = get_claim_similarity_premise_representations(
             sim=old_sim,
-            softmax=softmax,
             premise_to_query_claim=premise_to_query_claim,
         )
         assert set(sim.keys()) == set((pid, premise_to_query_claim[pid]) for pid in premise_ids)

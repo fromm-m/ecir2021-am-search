@@ -61,7 +61,6 @@ def get_query_claim_similarities(
 
 def get_claim_similarity_premise_representations(
     sim: Mapping[Tuple[str, int], Union[torch.FloatTensor, float]],
-    softmax: bool,
     premise_to_query_claim: Mapping[str, int],
 ) -> Mapping[Tuple[str, int], torch.FloatTensor]:
     """
@@ -69,8 +68,6 @@ def get_claim_similarity_premise_representations(
 
     :param sim:
         The similarities for (premise_id, claim_id) pairs.
-    :param softmax
-        Whether to apply softmax or use raw logits.
     :param premise_to_query_claim:
         A mapping from premise IDs to the query claim ID.
 
@@ -326,7 +323,6 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
                     product=True,
                     with_states=False,
                 )[0],
-                softmax=premise_representation_kwargs.get("softmax", True),
                 premise_to_query_claim={
                     pid: cid
                     for pid, cid in self.precomputed_similarities.keys()
