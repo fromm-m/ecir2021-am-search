@@ -4,7 +4,7 @@ import pathlib
 from abc import ABC
 from collections import defaultdict
 from operator import itemgetter
-from typing import Any, Callable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Collection, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy
 import pandas
@@ -61,7 +61,7 @@ def get_query_claim_similarities(
 
 def get_claim_similarity_premise_representations(
     sim: Mapping[Tuple[str, int], Union[torch.FloatTensor, float]],
-    premise_to_query_claim: Mapping[str, int],
+    premise_to_query_claim: Collection[Tuple[str, int]],
 ) -> Mapping[Tuple[str, int], torch.FloatTensor]:
     """
     Construct premise representations as similarity vectors to claims.
@@ -100,12 +100,12 @@ def get_claim_similarity_premise_representations(
     assert sim.shape == (len(premise_ids), len(result_claim_ids))
 
     # one row corresponds to one premise representation
-    result = dict(zip(premise_ids, sim))
+    premise_repr = dict(zip(premise_ids, sim))
 
     # add query claim to key
     result = {
-        (pid, premise_to_query_claim[pid]): vec
-        for pid, vec in result.items()
+        (pid, cid): premise_repr[pid]
+        for pid, cid in premise_to_query_claim
     }
 
     return result
