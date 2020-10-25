@@ -78,35 +78,29 @@ def get_claim_similarity_premise_representations(
         A mapping from (claim_id, premise_id) to a vector of similarities, shape: (num_claims,).
     """
     # verify that similarities are available for all claim, premise pairs
-    premise_ids, claim_ids = [
+    premise_ids, result_claim_ids = [
         sorted(set(map(itemgetter(pos), sim.keys())))
         for pos in (0, 1)
     ]
+
     assert set(sim.keys()) == set(
         (pid, cid)
         for pid in premise_ids
-        for cid in claim_ids
+        for cid in result_claim_ids
     )
 
-    # convert to tensor, shape: (num_premises, num_claims, 2)
+    # convert to tensor, shape: (num_premises, num_resultclaims)
     sim = torch.as_tensor(
         data=[
             [
-                sim[premise_id, claim_id].tolist()
-                for claim_id in claim_ids
+                sim[premise_id, result_claim_id].tolist()
+                for result_claim_id in result_claim_ids
             ]
             for premise_id in premise_ids
         ],
         dtype=torch.float32,
     )
-    assert sim.shape == (len(premise_ids), len(claim_ids), 2)
-
-    # apply softmax is requested
-    if softmax:
-        sim = sim.softmax(dim=-1)
-
-    # take probability of "similar" class
-    sim = sim[:, :, 1]
+    assert sim.shape == (len(premise_ids), len(result_claim_ids))
 
     # one row corresponds to one premise representation
     result = dict(zip(premise_ids, sim))
@@ -204,7 +198,7 @@ def _load_or_compute_similarities(
             max_seq_length=512,
             model_type="bert",
             cache_root=cache_root,
-            product=False
+            product=product
         )
 
         # generate logits for all claims-premise pairs
@@ -637,7 +631,8 @@ class Coreset(BaseCoreSetRanking):
             _eval_threshold = numpy.vectorize(_eval_threshold)
             scores = _eval_threshold(thresholds)
             fold_hash = abs(hash(tuple(sorted(claim_ids))))
-            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy", numpy.stack([thresholds, scores]))
+            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy",
+                       numpy.stack([thresholds, scores]))
             self.threshold = thresholds[scores.argmax()]
         else:
             self.threshold = max(thresholds, key=_eval_threshold)
@@ -806,9 +801,13 @@ class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityBasedMethod):
         self.ratio = cluster_ratio
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        premise_repr = torch.as_tensor(
+            [[v.numpy() for k, v in self.premise_representations.items() if k[0] == premise_id] for premise_id in
+             premise_ids]).squeeze(dim=1)
+
         return _premise_cluster_filtered(
             premise_ids=premise_ids,
-            premise_repr=torch.stack(list(map, self.premise_representations.get, premise_ids), dim=0),
+            premise_repr=premise_repr,
             k=k,
             ratio=self.ratio,
             similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
