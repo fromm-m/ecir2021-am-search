@@ -90,7 +90,7 @@ def get_claim_similarity_premise_representations(
     sim = torch.as_tensor(
         data=[
             [
-                sim[premise_id, result_claim_id].tolist()
+                float(sim[premise_id, result_claim_id])
                 for result_claim_id in result_claim_ids
             ]
             for premise_id in premise_ids
