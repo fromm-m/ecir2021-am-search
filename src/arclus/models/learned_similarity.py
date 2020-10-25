@@ -323,10 +323,7 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
                     product=True,
                     with_states=False,
                 )[0],
-                premise_to_query_claim={
-                    pid: cid
-                    for pid, cid in self.precomputed_similarities.keys()
-                },
+                premise_to_query_claim=self.precomputed_similarities.keys(),
             )
         elif premise_representation == PremiseRepresentationEnum.zero_shot_bert:
             self.premises_representations = torch.load(PREMISES_TEST_FEATURES)
