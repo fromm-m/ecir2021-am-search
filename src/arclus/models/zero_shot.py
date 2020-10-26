@@ -4,7 +4,7 @@ import pathlib
 from abc import ABC
 from logging import Logger
 from operator import itemgetter
-from typing import Mapping, Sequence
+from typing import Collection, Mapping, Sequence
 
 import pandas
 import torch
@@ -30,7 +30,7 @@ class ZeroShotRanking(RankingMethod, ABC):
 
     def __init__(
         self,
-        similarity: Similarity,
+        similarities: Collection[Similarity],
         claims_path: pathlib.Path = CLAIMS_TEST_FEATURES,
         premises_path: pathlib.Path = PREMISES_TEST_FEATURES,
     ):
@@ -44,28 +44,82 @@ class ZeroShotRanking(RankingMethod, ABC):
         :param premises_path:
             The path to the pre-computed premises representations.
         """
-        self.similarity = similarity
+        self.similarities = similarities
+        self.similarity = None
 
         # Load pre-computed representations
         self.claims = torch.load(claims_path)
         self.premises = torch.load(premises_path)
 
 
+def _rank_by_similarity(
+    claim_repr: torch.FloatTensor,
+    premise_repr: torch.FloatTensor,
+    similarity: Similarity,
+    k: int,
+    premise_ids: Sequence[str],
+) -> Sequence[str]:
+    # find most similar
+    top_ids = similarity.sim(
+        left=claim_repr,
+        right=premise_repr,
+    ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
+    # re-translate to original IDs
+    return [premise_ids[i] for i in top_ids.tolist()]
+
+
 class ZeroShotKNN(ZeroShotRanking):
     """Rank according to similarity of pre-trained BERT representations."""
 
+    def fit(
+        self,
+        training_data: pandas.DataFrame,
+        k: int,
+    ) -> "RankingMethod":
+        scores: Mapping[Similarity, Collection[float]] = dict()
+        num_query_claims = len(training_data["claim_id"].unique())
+        for query_claim_id, group in training_data.groupby(by="claim_id"):
+            # get the claim representation
+            claim_repr = self.claims[query_claim_id].unsqueeze(dim=0)
+            # get premise representations
+            premise_ids = group["premise_id"].tolist()
+            premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
+            for similarity in self.similarities:
+                scores[similarity].append(mndcg_score(
+                    y_pred=_rank_by_similarity(
+                        claim_repr=claim_repr,
+                        premise_repr=premise_repr,
+                        similarity=similarity,
+                        k=k,
+                        premise_ids=premise_ids
+                    ),
+                    data=group,
+                    k=k,
+                ))
+        # average over claims
+        scores = {
+            key: sum(values) / num_query_claims
+            for key, values in scores
+        }
+        self.similarity = max(scores.items(), key=itemgetter(1))[0]
+        return self
+
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        if self.similarity is None:
+            raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
+
         # get the claim representation
         claim_repr = self.claims[claim_id].unsqueeze(dim=0)
         # get premise representations
         premise_repr = torch.stack([self.premises[premise_id] for premise_id in premise_ids], dim=0)
-        # find most similar
-        top_ids = self.similarity.sim(
-            left=claim_repr,
-            right=premise_repr,
-        ).topk(k=k, largest=True, sorted=True).indices.squeeze(dim=0)
-        # re-translate to original IDs
-        return [premise_ids[i] for i in top_ids.tolist()]
+
+        return _rank_by_similarity(
+            claim_repr=claim_repr,
+            premise_repr=premise_repr,
+            similarity=self.similarity,
+            k=k,
+            premise_ids=premise_ids,
+        )
 
 
 class ZeroShotClusterKNN(ZeroShotRanking):
