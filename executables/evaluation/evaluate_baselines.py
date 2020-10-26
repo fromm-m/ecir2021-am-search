@@ -97,7 +97,7 @@ def main():
                       model_path=model_path,
                   )
                   for softmax in (False, True)
-                  for cluster_ratio in (0.25, 0.5, 1.0, None)
+                  for cluster_ratio in CLUSTER_RATIOS
               ] + [
                   # 6. Coreset
                   dict(
