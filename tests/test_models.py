@@ -104,7 +104,6 @@ class ZeroShotTests(RankingTests):
 
     def _pre_instantiation_hook(self, kwargs: MutableMapping[str, Any]) -> MutableMapping[str, Any]:  # noqa: D102
         kwargs = super()._pre_instantiation_hook(kwargs=kwargs)
-        kwargs['similarity'] = LpSimilarity(p=1)
 
         self.tmp_dir = tempfile.TemporaryDirectory()
         tmp_path = pathlib.Path(self.tmp_dir.name)
@@ -138,6 +137,9 @@ class ZeroShotKNNTests(ZeroShotTests, unittest.TestCase):
     """Tests for ZeroShotKNN."""
 
     cls = ZeroShotKNN
+    kwargs = dict(
+        similarities=["l2", "cos"],
+    )
 
 
 class ZeroShotClusterKNNTests(ZeroShotTests, unittest.TestCase):
@@ -145,17 +147,8 @@ class ZeroShotClusterKNNTests(ZeroShotTests, unittest.TestCase):
 
     cls = ZeroShotClusterKNN
     kwargs = dict(
-        cluster_ratio=0.5,
-    )
-
-
-class ZeroShotClusterKNNTests2(ZeroShotTests, unittest.TestCase):
-    """Tests for ZeroShotClusterKNN."""
-
-    cls = ZeroShotClusterKNN
-    kwargs = dict(
-        cluster_ratio=1.0,
-        cluster_representative='closest-to-claim',
+        cluster_ratios=[0.1, 0.5],
+        similarities=["l1", "cos"],
     )
 
 
@@ -193,7 +186,7 @@ def test_get_premise_representations():
     premise_ids = list(map(str, range(num_premises)))
     claim_ids = range(num_claims)
     old_sim = {
-        (premise_id, claim_id): 10.0 * torch.rand(1,)
+        (premise_id, claim_id): 10.0 * torch.rand(1, )
         for premise_id in premise_ids
         for claim_id in claim_ids
     }

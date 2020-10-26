@@ -1,5 +1,5 @@
 """Similarity functions for claims and premises."""
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
 from torch.nn import functional
@@ -106,3 +106,9 @@ def get_similarity_by_name(
 ) -> Similarity:
     """Instantiate similarity."""
     return _SIMILARITIES[name.lower()]
+
+
+def normalize_similarity(similarity: Union[str, Similarity]) -> Similarity:
+    if isinstance(similarity, Similarity):
+        return similarity
+    return get_similarity_by_name(name=similarity)
