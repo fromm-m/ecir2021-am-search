@@ -185,8 +185,9 @@ def argparse_bool(x):
 
 def resolve_num_clusters(ratio: Optional[float], num_premises: int, k: int) -> int:
     if ratio is None:
-        return k
-    n_clusters = int(round(ratio * num_premises))
-    n_clusters = max(n_clusters, k)
+        n_clusters = k
+    else:
+        n_clusters = int(round(ratio * num_premises))
+        n_clusters = max(n_clusters, k)
     n_clusters = min(n_clusters, num_premises)
     return n_clusters

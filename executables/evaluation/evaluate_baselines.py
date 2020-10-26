@@ -15,10 +15,29 @@ from arclus.models import get_baseline_method_by_name
 from arclus.models.learned_similarity import PremiseRepresentationEnum
 from arclus.pipeline import evaluate_ranking_method
 from arclus.settings import DATA_ROOT
-from arclus.similarity import get_similarity_by_name
 from arclus.utils import flatten_dict
 
 logging.basicConfig(level=logging.ERROR)
+
+PREMISE_REPRESENTATIONS = (
+    PremiseRepresentationEnum.learned_similarity_last_layer,
+    PremiseRepresentationEnum.learned_similarity_claim_similarities,
+)
+SIMILARITIES = (
+    "l1",
+    "l2",
+    "cos",
+)
+CLUSTER_RATIOS = (
+    0.25,
+    0.5,
+    1.0,
+    None,
+)
+CLUSTER_REPRESENTATIVES = (
+    "closest-to-center",
+    "closest-to-claim",
+)
 
 
 def main():
@@ -32,11 +51,8 @@ def main():
     parser.add_argument('--filter', default=None, type=str, required=False, nargs='*')
     args = parser.parse_args()
     similarities = DATA_ROOT / 'similarities'
+    softmax = True
     model_path = '/nfs/data3/fromm/argument_clustering/models/c26817b78afc4e95ab86793d7390081b'
-    PREMISE_REPRESENTATIONS = [
-        PremiseRepresentationEnum.learned_similarity_last_layer,
-        PremiseRepresentationEnum.learned_similarity_claim_similarities,
-    ]
     configs = [
                   # 0. Related Work: Dumani
                   dict(
@@ -48,20 +64,16 @@ def main():
                   # 1. zero_shot_knn
                   dict(
                       name='zero_shot_knn',
-                      similarity=similarity,
+                      similarities=SIMILARITIES,
                   )
-                  for similarity in ('l2', 'l1', 'cos')
               ] + [
                   # 2. zero_shot_cluster_knn
                   dict(
                       name='zero_shot_cluster_knn',
-                      cluster_ratio=cluster_ratio,
-                      cluster_representative=cluster_representative,
-                      similarity=similarity,
+                      cluster_ratios=CLUSTER_RATIOS,
+                      cluster_representatives=CLUSTER_REPRESENTATIVES,
+                      similarities=SIMILARITIES,
                   )
-                  for cluster_ratio in (0.25, 0.5, 1.0, None)
-                  for cluster_representative in ('closest-to-center', 'closest-to-claim')
-                  for similarity in ('l2', 'l1', 'cos')
               ] + [
                   # 3. learned_similarity_knn
                   dict(
@@ -70,56 +82,37 @@ def main():
                       similarities_dir=similarities,
                       model_path=model_path,
                   )
-                  for softmax in (False, True)
               ] + [
-                  # 4. learned_similarity_cluster_knn
+                  # 4. learned_similarity_cluster_knn + learned_similarity_cluster_knn
                   dict(
                       name='learned_similarity_cluster_knn',
                       softmax=softmax,
-                      cluster_ratio=cluster_ratio,
+                      cluster_ratios=CLUSTER_RATIOS,
                       similarities_dir=similarities,
                       model_path=model_path,
-
+                      premise_representation=premise_representations,
                   )
-                  for softmax in (False, True)
-                  for cluster_ratio in (0.25, 0.5, 1.0, None)
-              ] + [
-                  # 5. learned_similarity_cluster_knn
-                  dict(
-                      name='learned_similarity_matrix_cluster_knn',
-                      softmax=softmax,
-                      cluster_ratio=cluster_ratio,
-                      similarities_dir=similarities,
-                      model_path=model_path,
-                  )
-                  for softmax in (False, True)
-                  for cluster_ratio in (0.25, 0.5, 1.0, None)
+                  for premise_representations in PREMISE_REPRESENTATIONS
               ] + [
                   # 6. Coreset
                   dict(
                       name="coreset",
-                      premise_premise_similarity=similarity,
+                      premise_premise_similarities=SIMILARITIES,
                       similarities_dir=similarities,
                       model_path=model_path,
-                      debug=True,
-                      fill_to_k=fill_to_k,
                       premise_representation=premise_representation,
                   )
-                  for similarity in ('l2', 'l1', 'cos')
-                  for fill_to_k in (False, True)
                   for premise_representation in PREMISE_REPRESENTATIONS
               ] + [
                   # Biased Coreset
                   dict(
                       name="biased_coreset",
-                      premise_premise_similarity=similarity,
+                      premise_premise_similarities=SIMILARITIES,
                       similarities_dir=similarities,
                       model_path=model_path,
-                      debug=True,
                       resolution=50,
                       premise_representation=premise_representation,
                   )
-                  for similarity in ('l2', 'l1', 'cos')
                   for premise_representation in PREMISE_REPRESENTATIONS
               ]
 
@@ -154,14 +147,8 @@ def main():
             log_config["k"] = args.k
             mlflow.log_params(params=flatten_dict(log_config))
 
-            # Instantiate similarity if necessary
-            real_config = config.copy()
-            for key in ("similarity", "premise_premise_similarity"):
-                if key in config.keys():
-                    real_config[key] = get_similarity_by_name(name=config[key])
-
             # Instantiate method
-            method = get_baseline_method_by_name(**real_config)
+            method = get_baseline_method_by_name(**config)
 
             # Evaluate method
             result_df = evaluate_ranking_method(method=method, k=args.k)

@@ -12,9 +12,10 @@ import torch
 from sklearn.cluster import KMeans
 
 from .base import RankingMethod
+from .zero_shot import _average_scores
 from ..evaluation import mndcg_score
 from ..settings import PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
-from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
+from ..similarity import Similarity, normalize_similarity
 from ..utils import resolve_num_clusters
 from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -356,16 +357,17 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
 
     def __init__(
         self,
-        cluster_ratio: float,
+        cluster_ratios: Sequence[float],
         softmax: bool,
         model_path: str,
         similarities_dir: str,
         cache_root: Optional[str] = None,
+        premise_representations: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
         Initialize the method.
 
-        :param cluster_ratio: >0
+        :param cluster_ratios: >0
             The relative number of clusters to use. If None, use k.
         :param softmax:
             Whether to apply softmax on the scores for the pairwise similarity model.
@@ -379,20 +381,59 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
             model_path=model_path,
             similarities_dir=similarities_dir,
             cache_root=cache_root,
+            premise_representation=premise_representations,
         )
-        self.ratio = cluster_ratio
+        self.ratio = None
+        self.ratios = cluster_ratios
 
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        return _premise_cluster_filtered(
-            premise_ids=premise_ids,
-            premise_repr=get_premise_representations_for_claim(
-                claim_id=claim_id,
+    def fit(
+        self,
+        training_data: pandas.DataFrame,
+        k: int,
+    ) -> "RankingMethod":
+        # TODO: Merge with ZeroShotCluster
+        scores = defaultdict(list)
+        for query_claim_id, group in training_data.groupby(by="claim_id"):
+            premise_ids = group["premise_id"].tolist()
+            premise_repr = get_premise_representations_for_claim(
+                claim_id=query_claim_id,
                 premise_ids=premise_ids,
                 source=self.premise_representations,
-            ),
+            )
+            similarity_lookup = self.similarity_lookup(for_claim_id=query_claim_id)
+            for ratio in self.ratios:
+                scores[ratio].append(mndcg_score(
+                    y_pred=_premise_cluster_filtered(
+                        premise_ids=premise_ids,
+                        premise_repr=premise_repr,
+                        k=k,
+                        ratio=ratio,
+                        similarity_lookup=similarity_lookup,
+                    ),
+                    data=group,
+                    k=k,
+                ))
+        # average over claims
+        scores = _average_scores(scores=scores, num=len(training_data["claim_id"].unique()))
+        self.ratio = max(scores.items(), key=itemgetter(1))[0]
+        return self
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        if self.ratio is None:
+            raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
+
+        premise_repr = get_premise_representations_for_claim(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
+            source=self.premise_representations,
+        )
+        similarity_lookup = self.similarity_lookup(for_claim_id=claim_id)
+        return _premise_cluster_filtered(
+            premise_ids=premise_ids,
+            premise_repr=premise_repr,
             k=k,
             ratio=self.ratio,
-            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
+            similarity_lookup=similarity_lookup,
         )
 
 
@@ -452,6 +493,31 @@ def core_set(
     return result
 
 
+def _get_pairwise_similarity_and_first_premise(
+    premise_ids: Sequence[str],
+    similarity_lookup: Callable[[str], float],
+    premise_premise_similarity: Similarity,
+    premise_repr: torch.FloatTensor,
+) -> Tuple[int, torch.FloatTensor]:
+    """
+    Get pairwise premise similarities and select first premise by premise-claim similarity.
+
+    :param premise_ids:
+        The premise IDs.
+
+    :return:
+        The first premise ID (as local ID, i.e. 0 <= local_premise_id < num_premises), and a
+        (num_premises, num_premises) similarity matrix.
+    """
+    # select first premise as closest to claim
+    first_id = premise_ids.index(max(premise_ids, key=similarity_lookup))
+
+    # compute pair-wise similarity matrix
+    similarity = premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
+
+    return first_id, similarity
+
+
 class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
     """Base class for core set approaches."""
 
@@ -459,9 +525,8 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         self,
         model_path: str,
         similarities_dir: str,
-        premise_premise_similarity: Similarity = CosineSimilarity(),
+        premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
-        debug: bool = False,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -469,12 +534,10 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
 
         :param model_path:
             Directory where the fine-tuned bert similarity model checkpoint is located.
-        :param premise_premise_similarity:
+        :param premise_premise_similarities:
             The similarity to use between premise representations.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
-        :param debug:
-            Whether to store fit artifacts for further inspection.
         """
         super().__init__(
             model_path=model_path,
@@ -483,42 +546,8 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
             similarities_dir=similarities_dir,
             premise_representation=premise_representation,
         )
-        if isinstance(premise_premise_similarity, str):
-            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
-        self.premise_premise_similarity = premise_premise_similarity
-        self.debug = debug
-
-    def _get_pairwise_similarity_and_first_premise(
-        self,
-        claim_id,
-        premise_ids,
-    ) -> Tuple[int, torch.FloatTensor]:
-        """
-        Get pairwise premise similarities and select first premise by premise-claim similarity.
-
-        :param claim_id:
-            The claim ID.
-        :param premise_ids:
-            The premise IDs.
-
-        :return:
-            The first premise ID (as local ID, i.e. 0 <= local_premise_id < num_premises), and a
-            (num_premises, num_premises) similarity matrix.
-        """
-        # select first premise as closest to claim
-        first_id = premise_ids.index(max(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id)))
-
-        # get premise representations
-        premise_repr = get_premise_representations_for_claim(
-            claim_id=claim_id,
-            premise_ids=premise_ids,
-            source=self.premise_representations,
-        )
-
-        # compute pair-wise similarity matrix
-        similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
-
-        return first_id, similarity
+        self.premise_premise_similarities = premise_premise_similarities
+        self.premise_premise_similarity = None
 
 
 class Coreset(BaseCoreSetRanking):
@@ -528,10 +557,8 @@ class Coreset(BaseCoreSetRanking):
         self,
         model_path: str,
         similarities_dir: str,
-        premise_premise_similarity: Similarity = CosineSimilarity(),
+        premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
-        debug: bool = False,
-        fill_to_k: bool = False,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -541,20 +568,16 @@ class Coreset(BaseCoreSetRanking):
             Directory where the fine-tuned bert similarity model checkpoint is located.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
-        :param fill_to_k:
-            Whether to fill up with more candidates (according to KNN heuristic), if less than k candidates remain
-            after thresholding.
         """
         super().__init__(
             model_path=model_path,
             similarities_dir=similarities_dir,
-            premise_premise_similarity=premise_premise_similarity,
+            premise_premise_similarities=premise_premise_similarities,
             cache_root=cache_root,
-            debug=debug,
             premise_representation=premise_representation,
         )
         self.threshold = None
-        self.fill_to_k = fill_to_k
+        self.fill_to_k = None
 
     def fit(
         self,
@@ -579,59 +602,54 @@ class Coreset(BaseCoreSetRanking):
 
             # Evaluate each threshold
             for threshold in this_thresholds:
-                scores[claim_id][threshold] = mndcg_score(
-                    y_pred=self._rank(
-                        claim_id=claim_id,
-                        premise_ids=premise_ids,
-                        k=k,
-                        threshold=threshold,
-                        # Do not fill for tuning threshold
-                        fill_to_k=False,
-                    ),
-                    data=group,
-                    k=k
-                )
+                for similarity in self.premise_premise_similarities:
+                    scores[claim_id][threshold, similarity] = mndcg_score(
+                        y_pred=self._rank(
+                            claim_id=claim_id,
+                            premise_ids=premise_ids,
+                            k=k,
+                            threshold=threshold,
+                            premise_premise_similarity=normalize_similarity(similarity=similarity),
+                        ),
+                        data=group,
+                        k=k
+                    )
 
-        def _eval_threshold(threshold: float) -> float:
-            # Since the filtering is given by
-            #   [
-            #       p
-            #       for p in premises
-            #       if sim(claim, p) > threshold
-            #   ]
-            # a value t between two adjacency threshold t_low and t_high behaves as the higher threshold
-            # Thus, the score of t is equal to the smallest threshold t' which is larger than t
-            # If t is chosen larger than the largest threshold, no premises remains. Thus, the score is 0.
-            score = 0.0
-            for claim_id in claim_ids:
-                other_threshold = min(
-                    (
-                        other_threshold
-                        for other_threshold in scores[claim_id].keys()
-                        if other_threshold > threshold
-                    ),
-                    default=None,
-                )
-                if other_threshold is not None:
-                    score += scores[claim_id][other_threshold]
-                # else: score += 0
-            # normalize score for interpretable results
-            return score / len(claim_ids)
-
-        # choose threshold
-        if self.debug:
-            thresholds = numpy.asarray(thresholds)
-            _eval_threshold = numpy.vectorize(_eval_threshold)
-            scores = _eval_threshold(thresholds)
-            fold_hash = abs(hash(tuple(sorted(claim_ids))))
-            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy",
-                       numpy.stack([thresholds, scores]))
-            self.threshold = thresholds[scores.argmax()]
-        else:
-            self.threshold = max(thresholds, key=_eval_threshold)
+        best_score = float('-inf')
+        for similarity in self.premise_premise_similarities:
+            for threshold in thresholds:
+                # Since the filtering is given by
+                #   [
+                #       p
+                #       for p in premises
+                #       if sim(claim, p) > threshold
+                #   ]
+                # a value t between two adjacency threshold t_low and t_high behaves as the higher threshold
+                # Thus, the score of t is equal to the smallest threshold t' which is larger than t
+                # If t is chosen larger than the largest threshold, no premises remains. Thus, the score is 0.
+                score = 0.0
+                for claim_id in claim_ids:
+                    other_threshold = min(
+                        (
+                            other_threshold
+                            for other_threshold in scores[claim_id, similarity].keys()
+                            if other_threshold > threshold
+                        ),
+                        default=None,
+                    )
+                    if other_threshold is not None:
+                        score += scores[claim_id][other_threshold]
+                    # else: score += 0
+                # normalize score for interpretable results
+                score = score / len(claim_ids)
+                if score > best_score:
+                    best_score = score
+                    self.similarity = similarity
+                    self.threshold = threshold
+        self.premise_premise_similarity = normalize_similarity(similarity=self.similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        if self.threshold is None:
+        if self.threshold is None or self.premise_premise_similarity is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
         return self._rank(
@@ -639,38 +657,47 @@ class Coreset(BaseCoreSetRanking):
             premise_ids=premise_ids,
             k=k,
             threshold=self.threshold,
-            fill_to_k=self.fill_to_k,
+            premise_premise_similarity=self.premise_premise_similarity,
         )
 
-    def _rank(self, claim_id, premise_ids, k, threshold: float, fill_to_k: bool) -> Sequence[str]:
+    def _rank(self, claim_id, premise_ids, k, threshold: float, premise_premise_similarity: Similarity) -> Sequence[str]:
         # filter premise IDs
-        premise_ids = [
+        filtered_premise_ids = [
             premise_id
             for premise_id in premise_ids
             if self.precomputed_similarities[premise_id, claim_id] > threshold
         ]
 
-        if len(premise_ids) > 0:
-            first_id, similarity = self._get_pairwise_similarity_and_first_premise(
+        if len(filtered_premise_ids) > 0:
+            # get premise representations
+            premise_repr = get_premise_representations_for_claim(
                 claim_id=claim_id,
-                premise_ids=premise_ids,
+                premise_ids=filtered_premise_ids,
+                source=self.premise_representations,
+            )
+
+            first_id, similarity_matrix = _get_pairwise_similarity_and_first_premise(
+                premise_ids=filtered_premise_ids,
+                similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
+                premise_premise_similarity=premise_premise_similarity,
+                premise_repr=premise_repr,
             )
 
             # apply coreset
-            local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
+            local_ids = core_set(similarity=similarity_matrix, first_id=first_id, k=k)
 
             # convert back to premise_ids
-            chosen = [premise_ids[i] for i in local_ids]
+            chosen = [filtered_premise_ids[i] for i in local_ids]
         else:
             logger.warning("No premise after thresholding.")
             chosen = []
 
-        if fill_to_k and len(chosen) < k:
-            chosen += sorted(
+        if len(chosen) < k:
+            chosen = chosen + sorted(
                 set(premise_ids).difference(chosen),
                 key=self.similarity_lookup(for_claim_id=claim_id),
                 reverse=True,
-            )[:k - len(chosen)]
+            )
 
         return chosen
 
@@ -682,9 +709,8 @@ class BiasedCoreset(BaseCoreSetRanking):
         self,
         model_path: str,
         similarities_dir: str,
-        premise_premise_similarity: Similarity = CosineSimilarity(),
+        premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
-        debug: bool = False,
         resolution: int = 10,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
@@ -699,9 +725,8 @@ class BiasedCoreset(BaseCoreSetRanking):
         super().__init__(
             model_path=model_path,
             similarities_dir=similarities_dir,
-            premise_premise_similarity=premise_premise_similarity,
+            premise_premise_similarities=premise_premise_similarities,
             cache_root=cache_root,
-            debug=debug,
             premise_representation=premise_representation,
         )
         self.alpha = None
@@ -712,38 +737,44 @@ class BiasedCoreset(BaseCoreSetRanking):
         training_data: pandas.DataFrame,
         k: int,
     ):
-        def _evaluate_alpha(alpha: float) -> float:
-            score = 0.0
-            for claim_id, group in training_data.groupby(by="claim_id"):
-                premise_ids = group["premise_id"].tolist()
-                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha)
-                score += mndcg_score(y_pred=y_pred, data=group, k=k)
-            return score / len(training_data["claim_id"].unique())
-
-        # compute scores for all alpha values
-        alphas = numpy.linspace(start=0, stop=1, num=self.resolution)
-        if self.debug:
-            _eval_alpha = numpy.vectorize(_evaluate_alpha)
-            scores = _eval_alpha(alphas)
-            fold_hash = abs(hash(tuple(sorted(training_data["claim_id"].unique()))))
-            numpy.save(f"/tmp/convex_scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy", numpy.stack([alphas, scores]))
-            self.alpha = alphas[scores.argmax()]
-        else:
-            self.alpha = max(alphas, key=_evaluate_alpha)
+        high_score = float('-inf')
+        for alpha in numpy.linspace(start=0, stop=1, num=self.resolution):
+            for similarity in self.premise_premise_similarities:
+                similarity_instance = normalize_similarity(similarity=similarity)
+                score = 0.0
+                for claim_id, group in training_data.groupby(by="claim_id"):
+                    premise_ids = group["premise_id"].tolist()
+                    y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha, premise_premise_similarity=similarity_instance)
+                    score += mndcg_score(y_pred=y_pred, data=group, k=k)
+                score = score / len(training_data["claim_id"].unique())
+                if score > high_score:
+                    high_score = score
+                    self.premise_premise_similarity = similarity
+                    self.alpha = alpha
+        self.premise_premise_similarity = normalize_similarity(similarity=self.premise_premise_similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        if self.alpha is None:
+        if self.alpha is None or self.premise_premise_similarity is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
-        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=self.alpha)
+        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=self.alpha, premise_premise_similarity=self.premise_premise_similarity)
 
-    def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float) -> Sequence[str]:
+    def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float, premise_premise_similarity: Similarity) -> Sequence[str]:
         premise_ids = list(premise_ids)
 
-        # select first premise as closest to claim and get pairwise premise similarities
-        first_id, premise_premise_similarity = self._get_pairwise_similarity_and_first_premise(
+        # get premise representations
+        premise_repr = get_premise_representations_for_claim(
             claim_id=claim_id,
             premise_ids=premise_ids,
+            source=self.premise_representations,
+        )
+
+        # select first premise as closest to claim and get pairwise premise similarities
+        first_id, similarity_matrix = _get_pairwise_similarity_and_first_premise(
+            premise_ids=premise_ids,
+            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
+            premise_premise_similarity=premise_premise_similarity,
+            premise_repr=premise_repr,
         )
 
         claim_premise_similarity = torch.as_tensor(
@@ -753,7 +784,7 @@ class BiasedCoreset(BaseCoreSetRanking):
 
         # apply coreset
         local_ids = core_set(
-            similarity=alpha * premise_premise_similarity,
+            similarity=alpha * similarity_matrix,
             first_id=first_id,
             k=k,
             premise_bias=(1 - alpha) * claim_premise_similarity,
@@ -761,47 +792,3 @@ class BiasedCoreset(BaseCoreSetRanking):
 
         # convert back to premise_ids
         return [premise_ids[i] for i in local_ids]
-
-
-class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityBasedMethod):
-    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
-
-    def __init__(
-        self,
-        cluster_ratio: float,
-        softmax: bool,
-        model_path: str,
-        similarities_dir: str,
-        cache_root: Optional[str] = None,
-    ):
-        """
-        Initialize the method.
-
-        :param softmax:
-            Whether to apply softmax on the scores for the pairwise similarity model.
-        :param model_path:
-            Directory where the fine-tuned bert similarity model checkpoint is located.
-        :param cache_root:
-            The directory where temporary BERT inference files are stored.
-        """
-        super().__init__(
-            softmax=softmax,
-            model_path=model_path,
-            similarities_dir=similarities_dir,
-            cache_root=cache_root,
-            premise_representation=PremiseRepresentationEnum.learned_similarity_claim_similarities,
-        )
-        self.ratio = cluster_ratio
-
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        premise_repr = torch.as_tensor(
-            [[v.numpy() for k, v in self.premise_representations.items() if k[0] == premise_id] for premise_id in
-             premise_ids]).squeeze(dim=1)
-
-        return _premise_cluster_filtered(
-            premise_ids=premise_ids,
-            premise_repr=premise_repr,
-            k=k,
-            ratio=self.ratio,
-            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
-        )
