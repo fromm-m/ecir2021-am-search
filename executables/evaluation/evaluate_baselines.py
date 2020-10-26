@@ -83,25 +83,16 @@ def main():
                       model_path=model_path,
                   )
               ] + [
-                  # 4. learned_similarity_cluster_knn
+                  # 4. learned_similarity_cluster_knn + learned_similarity_cluster_knn
                   dict(
                       name='learned_similarity_cluster_knn',
                       softmax=softmax,
                       cluster_ratios=CLUSTER_RATIOS,
                       similarities_dir=similarities,
                       model_path=model_path,
-
+                      premise_representation=premise_representations,
                   )
-              ] + [
-                  # 5. learned_similarity_cluster_knn
-                  dict(
-                      name='learned_similarity_matrix_cluster_knn',
-                      softmax=softmax,
-                      cluster_ratio=cluster_ratio,
-                      similarities_dir=similarities,
-                      model_path=model_path,
-                  )
-                  for cluster_ratio in CLUSTER_RATIOS
+                  for premise_representations in PREMISE_REPRESENTATIONS
               ] + [
                   # 6. Coreset
                   dict(

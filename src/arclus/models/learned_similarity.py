@@ -362,6 +362,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
         model_path: str,
         similarities_dir: str,
         cache_root: Optional[str] = None,
+        premise_representations: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
         Initialize the method.
@@ -380,6 +381,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
             model_path=model_path,
             similarities_dir=similarities_dir,
             cache_root=cache_root,
+            premise_representation=premise_representations,
         )
         self.ratio = None
         self.ratios = cluster_ratios
@@ -390,10 +392,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
         k: int,
     ) -> "RankingMethod":
         # TODO: Merge with ZeroShotCluster
-        scores = {
-            ratio: []
-            for ratio in self.ratios
-        }
+        scores = defaultdict(list)
         for query_claim_id, group in training_data.groupby(by="claim_id"):
             premise_ids = group["premise_id"].tolist()
             premise_repr = get_premise_representations_for_claim(
@@ -803,47 +802,3 @@ class BiasedCoreset(BaseCoreSetRanking):
 
         # convert back to premise_ids
         return [premise_ids[i] for i in local_ids]
-
-
-class LearnedSimilarityMatrixClusterKNN(LearnedSimilarityBasedMethod):
-    """Rank premises according to precomputed fine-tuned BERT similarities for concatenation of premise and claim, only returning one premise for each cluster."""
-
-    def __init__(
-        self,
-        cluster_ratio: float,
-        softmax: bool,
-        model_path: str,
-        similarities_dir: str,
-        cache_root: Optional[str] = None,
-    ):
-        """
-        Initialize the method.
-
-        :param softmax:
-            Whether to apply softmax on the scores for the pairwise similarity model.
-        :param model_path:
-            Directory where the fine-tuned bert similarity model checkpoint is located.
-        :param cache_root:
-            The directory where temporary BERT inference files are stored.
-        """
-        super().__init__(
-            softmax=softmax,
-            model_path=model_path,
-            similarities_dir=similarities_dir,
-            cache_root=cache_root,
-            premise_representation=PremiseRepresentationEnum.learned_similarity_claim_similarities,
-        )
-        self.ratio = cluster_ratio
-
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        premise_repr = torch.as_tensor(
-            [[v.numpy() for k, v in self.premise_representations.items() if k[0] == premise_id] for premise_id in
-             premise_ids]).squeeze(dim=1)
-
-        return _premise_cluster_filtered(
-            premise_ids=premise_ids,
-            premise_repr=premise_repr,
-            k=k,
-            ratio=self.ratio,
-            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
-        )
