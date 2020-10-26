@@ -356,7 +356,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
 
     def __init__(
         self,
-        cluster_ratio: float,
+        cluster_ratios: Sequence[float],
         softmax: bool,
         model_path: str,
         similarities_dir: str,
@@ -365,7 +365,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
         """
         Initialize the method.
 
-        :param cluster_ratio: >0
+        :param cluster_ratios: >0
             The relative number of clusters to use. If None, use k.
         :param softmax:
             Whether to apply softmax on the scores for the pairwise similarity model.
@@ -380,19 +380,64 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
             similarities_dir=similarities_dir,
             cache_root=cache_root,
         )
-        self.ratio = cluster_ratio
+        self.ratio = None
+        self.ratios = cluster_ratios
 
-    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        return _premise_cluster_filtered(
-            premise_ids=premise_ids,
-            premise_repr=get_premise_representations_for_claim(
-                claim_id=claim_id,
+    def fit(
+        self,
+        training_data: pandas.DataFrame,
+        k: int,
+    ) -> "RankingMethod":
+        # TODO: Merge with ZeroShotCluster
+        score = {
+            ratio: []
+            for ratio in self.ratios
+        }
+        num_query_claims = len(training_data["claim_id"].unique())
+        for query_claim_id, group in training_data.groupby(by="claim_id"):
+            premise_ids = group["premise_id"].tolist()
+            premise_repr = get_premise_representations_for_claim(
+                claim_id=query_claim_id,
                 premise_ids=premise_ids,
                 source=self.premise_representations,
-            ),
+            )
+            similarity_lookup = self.similarity_lookup(for_claim_id=query_claim_id)
+            for ratio in self.ratios:
+                score[ratio].append(mndcg_score(
+                    y_pred=_premise_cluster_filtered(
+                        premise_ids=premise_ids,
+                        premise_repr=premise_repr,
+                        k=k,
+                        ratio=ratio,
+                        similarity_lookup=similarity_lookup,
+                    ),
+                    data=group,
+                    k=k,
+                ))
+        # average over claims
+        score = {
+            ratio: sum(scores) / num_query_claims
+            for ratio, scores in score.items()
+        }
+        self.ratio = max(score.items(), key=itemgetter(1))[0]
+        return self
+
+    def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
+        if self.ratio is None:
+            raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
+
+        premise_repr = get_premise_representations_for_claim(
+            claim_id=claim_id,
+            premise_ids=premise_ids,
+            source=self.premise_representations,
+        )
+        similarity_lookup = self.similarity_lookup(for_claim_id=claim_id)
+        return _premise_cluster_filtered(
+            premise_ids=premise_ids,
+            premise_repr=premise_repr,
             k=k,
             ratio=self.ratio,
-            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
+            similarity_lookup=similarity_lookup,
         )
 
 
