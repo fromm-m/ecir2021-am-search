@@ -12,6 +12,7 @@ import torch
 from sklearn.cluster import KMeans
 
 from .base import RankingMethod
+from .zero_shot import _average_scores
 from ..evaluation import mndcg_score
 from ..settings import PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
 from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
@@ -389,11 +390,10 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
         k: int,
     ) -> "RankingMethod":
         # TODO: Merge with ZeroShotCluster
-        score = {
+        scores = {
             ratio: []
             for ratio in self.ratios
         }
-        num_query_claims = len(training_data["claim_id"].unique())
         for query_claim_id, group in training_data.groupby(by="claim_id"):
             premise_ids = group["premise_id"].tolist()
             premise_repr = get_premise_representations_for_claim(
@@ -403,7 +403,7 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
             )
             similarity_lookup = self.similarity_lookup(for_claim_id=query_claim_id)
             for ratio in self.ratios:
-                score[ratio].append(mndcg_score(
+                scores[ratio].append(mndcg_score(
                     y_pred=_premise_cluster_filtered(
                         premise_ids=premise_ids,
                         premise_repr=premise_repr,
@@ -415,11 +415,8 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
                     k=k,
                 ))
         # average over claims
-        score = {
-            ratio: sum(scores) / num_query_claims
-            for ratio, scores in score.items()
-        }
-        self.ratio = max(score.items(), key=itemgetter(1))[0]
+        scores = _average_scores(scores=scores, num=len(training_data["claim_id"].unique()))
+        self.ratio = max(scores.items(), key=itemgetter(1))[0]
         return self
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
