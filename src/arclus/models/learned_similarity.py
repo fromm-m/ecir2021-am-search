@@ -662,22 +662,22 @@ class Coreset(BaseCoreSetRanking):
 
     def _rank(self, claim_id, premise_ids, k, threshold: float, premise_premise_similarity: Similarity) -> Sequence[str]:
         # filter premise IDs
-        premise_ids = [
+        filtered_premise_ids = [
             premise_id
             for premise_id in premise_ids
             if self.precomputed_similarities[premise_id, claim_id] > threshold
         ]
 
-        if len(premise_ids) > 0:
+        if len(filtered_premise_ids) > 0:
             # get premise representations
             premise_repr = get_premise_representations_for_claim(
                 claim_id=claim_id,
-                premise_ids=premise_ids,
+                premise_ids=filtered_premise_ids,
                 source=self.premise_representations,
             )
 
             first_id, similarity_matrix = _get_pairwise_similarity_and_first_premise(
-                premise_ids=premise_ids,
+                premise_ids=filtered_premise_ids,
                 similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
                 premise_premise_similarity=premise_premise_similarity,
                 premise_repr=premise_repr,
@@ -687,17 +687,17 @@ class Coreset(BaseCoreSetRanking):
             local_ids = core_set(similarity=similarity_matrix, first_id=first_id, k=k)
 
             # convert back to premise_ids
-            chosen = [premise_ids[i] for i in local_ids]
+            chosen = [filtered_premise_ids[i] for i in local_ids]
         else:
             logger.warning("No premise after thresholding.")
             chosen = []
 
         if len(chosen) < k:
-            chosen += sorted(
+            chosen = chosen + sorted(
                 set(premise_ids).difference(chosen),
                 key=self.similarity_lookup(for_claim_id=claim_id),
                 reverse=True,
-            )[:k - len(chosen)]
+            )
 
         return chosen
 

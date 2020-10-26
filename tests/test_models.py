@@ -3,9 +3,7 @@ import random
 import string
 import tempfile
 import unittest
-from collections import defaultdict
-from typing import Any, List, Mapping, MutableMapping, Optional, Sequence, Type
-from unittest.case import SkipTest
+from typing import Any, Collection, List, Mapping, MutableMapping, Optional, Sequence, Tuple, Type
 
 import numpy
 import pandas
@@ -15,11 +13,12 @@ from arclus.models import get_baseline_method_by_name
 from arclus.models.base import RankingMethod
 from arclus.models.learned_similarity import BiasedCoreset, Coreset, core_set, get_claim_similarity_premise_representations, get_query_claim_similarities
 from arclus.models.zero_shot import ZeroShotClusterKNN, ZeroShotKNN
+from arclus.settings import PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
 from arclus.similarity import LpSimilarity
 
 
 def _generate_random_data(
-    num_claims: int,
+    all_claim_ids: Sequence[int],
     premise_ids: Sequence[str],
     max_premises: int,
     min_premises: int,
@@ -27,7 +26,7 @@ def _generate_random_data(
 ) -> pandas.DataFrame:
     data = []
     clusters = string.ascii_letters[:num_clusters]
-    for claim in range(num_claims):
+    for claim in all_claim_ids:
         num = random.randrange(min_premises, max_premises)
         premises = random.sample(premise_ids, num)
         relevance = numpy.random.randint(3, size=num)
@@ -65,11 +64,13 @@ class RankingTests:
     def _pre_instantiation_hook(self, kwargs: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
         """Prepare instantiation."""
         self.all_premise_ids = [c for c in string.ascii_letters[:self.num_premises]]
+        self.all_query_claim_ids = list(range(self.num_claims))
+        self.all_result_claim_ids = list(range(self.num_claims, 3 * self.num_claims))
         num_clusters = 3
-        min_premises = 3
+        min_premises = self.k
         max_premises = self.num_premises // 2
         self.training_data = _generate_random_data(
-            num_claims=self.num_claims,
+            all_claim_ids=self.all_query_claim_ids,
             premise_ids=self.all_premise_ids,
             max_premises=max_premises,
             min_premises=min_premises,
@@ -87,11 +88,12 @@ class RankingTests:
     def test_rank(self):
         """Test rank."""
         self.instance.fit(training_data=self.training_data, k=self.k)
-        this_premise_ids = random.sample(self.all_premise_ids, 2 * self.k)
-        ranking = self.instance.rank(claim_id=0, premise_ids=this_premise_ids, k=self.k)
+        premise_ids = self.training_data.loc[self.training_data["claim_id"] == self.all_query_claim_ids[0]]["premise_id"].tolist()
+        assert len(premise_ids) >= self.k
+        ranking = self.instance.rank(claim_id=0, premise_ids=premise_ids, k=self.k)
         assert isinstance(ranking, (list, tuple))
         assert len(ranking) == self.k
-        assert set(ranking).issubset(this_premise_ids)
+        assert set(ranking).issubset(premise_ids)
 
     def test_get_baseline_method_by_name(self):
         """Test get_baseline_method_by_name."""
@@ -234,32 +236,57 @@ class CoreSetUtilityTests(unittest.TestCase):
         assert result == [0, 2, 3]
 
 
+def _generate_random_product_similarities(
+    premise_ids: Collection[str],
+    result_claim_ids: Collection[int]
+) -> Mapping[Tuple[str, int], torch.FloatTensor]:
+    return {
+        (pid, cid): torch.rand(2, )
+        for pid in premise_ids
+        for cid in result_claim_ids
+    }
+
+
+def _generate_random_pair_similarities(premise_claim_pairs: Collection[Tuple[str, int]]) -> Mapping[Tuple[str, int], torch.FloatTensor]:
+    return {
+        (pid, cid): torch.rand(2, )
+        for pid, cid in premise_claim_pairs
+    }
+
+
+def _generate_random_premise_states(premise_claim_pairs: Collection[Tuple[str, int]], dim: int = 3) -> Mapping[Tuple[str, int], torch.FloatTensor]:
+    return {
+        (pid, cid): torch.rand(dim, )
+        for pid, cid in premise_claim_pairs
+    }
+
+
 class PrecomputedSimilarityDependentTests(RankingTests):
     """Base class for ranking methods dependent on precomputed similarities."""
 
-    def setUp(self):  # noqa: D102
-        # mock
-        self.kwargs = self.kwargs or {}
-        self.kwargs = self._pre_instantiation_hook(kwargs=self.kwargs)
-        self.instance = self.cls.__new__(self.cls)
+    def _pre_instantiation_hook(self, kwargs: MutableMapping[str, Any]) -> MutableMapping[str, Any]:  # noqa: D102
+        kwargs = super()._pre_instantiation_hook(kwargs=kwargs)
 
-        # mock
-        fake_similarities = defaultdict(lambda: random.random())
-        self.instance.__dict__["precomputed_similarities"] = fake_similarities
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        tmp_path = pathlib.Path(self.tmp_dir.name)
 
-        fake_states = defaultdict(lambda: torch.rand(self.dim))
-        self.instance.__dict__["premise_representations"] = fake_states
+        # create dummy precomputed similarities
+        product_path = tmp_path / PREP_TEST_PRODUCT_SIMILARITIES
+        torch.save(_generate_random_product_similarities(premise_ids=self.all_premise_ids, result_claim_ids=self.all_result_claim_ids), product_path)
+        premise_query_claim_pairs = set(zip(*[self.training_data[col] for col in ["premise_id", "claim_id"]]))
+        pair_path = tmp_path / PREP_TEST_SIMILARITIES
+        torch.save(_generate_random_pair_similarities(premise_claim_pairs=premise_query_claim_pairs), pair_path)
+        state_path = tmp_path / PREP_TEST_STATES
+        torch.save(_generate_random_premise_states(premise_claim_pairs=premise_query_claim_pairs), state_path)
 
-        for key, value in self.kwargs.items():
-            self.instance.__dict__[key] = value
+        kwargs["similarities_dir"] = tmp_path
+        kwargs["model_path"] = None
 
-        self._post_fake_instantiation_hook()
+        return kwargs
 
-    def _post_fake_instantiation_hook(self):
-        pass
-
-    def test_get_baseline_method_by_name(self):
-        raise SkipTest("Expensive initialization")
+    def tearDown(self):
+        """Cleanup files."""
+        self.tmp_dir.cleanup()
 
 
 class CoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
@@ -270,10 +297,6 @@ class CoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
         premise_premise_similarities=["cos", "l1"],
     )
 
-    def _post_fake_instantiation_hook(self):  # noqa: D102
-        self.instance.__dict__["threshold"] = None
-        self.instance.__dict__["premise_premise_similarity"] = None
-
 
 class BiasedCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
     """Test for BiasedCoreSet ranking method."""
@@ -283,7 +306,3 @@ class BiasedCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase)
         premise_premise_similarities=["l2", "l1"],
         resolution=10,
     )
-
-    def _post_fake_instantiation_hook(self):  # noqa: D102
-        self.instance.__dict__["alpha"] = None
-        self.instance.__dict__["premise_premise_similarity"] = None
