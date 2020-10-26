@@ -233,7 +233,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
             premise_ids = group["premise_id"].tolist()
             claim_repr, premise_repr = self._get_representations(claim_id=query_claim_id, premise_ids=premise_ids)
             for ratio in self.ratios:
-                cluster_assignment, cluster_centers = _cluster_representations(premise_repr, ratio=self.ratio, k=k)
+                cluster_assignment, cluster_centers = _cluster_representations(premise_repr, ratio=ratio, k=k)
                 for similarity in self.similarities:
                     for representative in self.cluster_representatives:
                         y_pred = _choose_premises_from_clusters(
