@@ -3,8 +3,9 @@ import inspect
 from typing import Any
 
 from .base import RankingMethod
-from .baselines import LearnedSimilarityClusterKNN, LearnedSimilarityKNN, ZeroShotClusterKNN, ZeroShotKNN  # noqa: F401
 from .dumani import Dumani  # noqa: F401
+from .learned_similarity import LearnedSimilarityBasedMethod, LearnedSimilarityClusterKNN  # noqa: F401
+from .zero_shot import ZeroShotClusterKNN, ZeroShotKNN  # noqa: F401
 from ..utils import get_subclass_by_name
 
 

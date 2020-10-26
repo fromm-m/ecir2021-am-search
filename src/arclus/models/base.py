@@ -2,9 +2,28 @@
 from abc import abstractmethod
 from typing import Sequence
 
+import pandas
+
 
 class RankingMethod:
     """Base class for ranking methods."""
+
+    def fit(
+        self,
+        training_data: pandas.DataFrame,
+        k: int,
+    ) -> "RankingMethod":
+        """
+        Optimize the ranking methods parameters with a training set.
+
+        .. note ::
+            This modified the object in-place, i.e. updates internal parameters.
+
+        :param training_data:
+            The training dataset.
+        :param k: >0
+            The number of premises to return for each claim.
+        """
 
     @abstractmethod
     def rank(

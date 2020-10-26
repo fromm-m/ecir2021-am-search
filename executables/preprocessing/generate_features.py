@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description='Pre-compute BERT features.')
     parser.add_argument('--mode', default='pair', choices=['pair', 'claims', 'premises'], help='The feature mode.')
     args = parser.parse_args()
+    size = 325000
 
     if args.mode == 'pair':
         premises_df = pandas.read_csv(PREP_PREMISES_ENERGY, delimiter=",")
@@ -39,6 +40,8 @@ def main():
         output_path = CLAIMS_TEST_FEATURES
     elif args.mode == 'premises':
         df = pandas.read_csv(PREP_PREMISES)
+        print(len(df))
+        df = df.head(size)
         texts = df['premise_text']
         keys = df['premise_id']
         output_path = PREMISES_FEATURES

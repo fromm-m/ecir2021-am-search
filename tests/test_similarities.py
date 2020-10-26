@@ -26,7 +26,7 @@ class SimilarityTests:
         """Test sim()."""
         claims = torch.rand(self.n_claims, self.dim)
         premises = torch.rand(self.n_premises, self.dim)
-        sim = self.instance.sim(claims=claims, premises=premises)
+        sim = self.instance.sim(left=claims, right=premises)
         assert torch.is_tensor(sim)
         assert sim.shape == (self.n_claims, self.n_premises)
 

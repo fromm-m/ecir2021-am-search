@@ -1,14 +1,10 @@
 """Evaluation utilities."""
 import math
-from typing import Collection, Sequence, Union
+from typing import Sequence
 
 import pandas
 import torch
 from sklearn.metrics import f1_score
-from tqdm import tqdm
-
-from arclus.models.base import RankingMethod
-from arclus.utils import load_assignments_with_numeric_relevance
 
 
 def accuracy(
@@ -114,41 +110,3 @@ def mndcg_score(
     score = mdcg_score(y_pred=y_pred, data=data, k=k)
     assert score <= opt_score
     return score / opt_score
-
-
-def evaluate_ranking_method(
-    method: RankingMethod,
-    k: Union[int, Collection[int]],
-) -> pandas.DataFrame:
-    """
-    Evaluate a ranking method with mnDCG@k.
-
-    :param method:
-        The ranking method.
-    :param k: > 0
-        (Potentially multiple) cut-off parameter(s).
-
-    :return:
-        A dataframe with columns ["claim_id", "k", "mnDCG"].
-    """
-    # Input normalization
-    if isinstance(k, int):
-        k = [k]
-    # load assignments
-    df = load_assignments_with_numeric_relevance()
-    # keep only relevant columns
-    df = df.loc[:, ["claim_id", "premise_id", "relevance", "premiseClusterID_groundTruth"]]
-    # iterate over all claims
-    result_data = []
-    for claim_id, queries in tqdm(df.groupby(by="claim_id"), unit='claim'):
-        for kk in k:
-            # predict ranking
-            predicted_ranking = method.rank(
-                claim_id=claim_id,
-                premise_ids=queries["premise_id"].to_numpy(dtype=str),
-                k=kk,
-            )
-            # evaluate ranking
-            score = mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)
-            result_data.append((claim_id, kk, score))
-    return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
