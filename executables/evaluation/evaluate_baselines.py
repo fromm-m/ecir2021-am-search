@@ -100,11 +100,8 @@ def main():
                       premise_premise_similarities=SIMILARITIES,
                       similarities_dir=similarities,
                       model_path=model_path,
-                      debug=True,
-                      fill_to_k=fill_to_k,
                       premise_representation=premise_representation,
                   )
-                  for fill_to_k in (False, True)
                   for premise_representation in PREMISE_REPRESENTATIONS
               ] + [
                   # Biased Coreset
@@ -113,7 +110,6 @@ def main():
                       premise_premise_similarities=SIMILARITIES,
                       similarities_dir=similarities,
                       model_path=model_path,
-                      debug=True,
                       resolution=50,
                       premise_representation=premise_representation,
                   )
