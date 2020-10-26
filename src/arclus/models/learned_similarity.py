@@ -15,7 +15,7 @@ from .base import RankingMethod
 from .zero_shot import _average_scores
 from ..evaluation import mndcg_score
 from ..settings import PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
-from ..similarity import Similarity
+from ..similarity import Similarity, normalize_similarity
 from ..utils import resolve_num_clusters
 from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -527,7 +527,6 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         similarities_dir: str,
         premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
-        debug: bool = False,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -535,12 +534,10 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
 
         :param model_path:
             Directory where the fine-tuned bert similarity model checkpoint is located.
-        :param premise_premise_similarity:
+        :param premise_premise_similarities:
             The similarity to use between premise representations.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
-        :param debug:
-            Whether to store fit artifacts for further inspection.
         """
         super().__init__(
             model_path=model_path,
@@ -551,7 +548,6 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         )
         self.premise_premise_similarities = premise_premise_similarities
         self.premise_premise_similarity = None
-        self.debug = debug
 
 
 class Coreset(BaseCoreSetRanking):
@@ -563,7 +559,6 @@ class Coreset(BaseCoreSetRanking):
         similarities_dir: str,
         premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
-        debug: bool = False,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -579,7 +574,6 @@ class Coreset(BaseCoreSetRanking):
             similarities_dir=similarities_dir,
             premise_premise_similarities=premise_premise_similarities,
             cache_root=cache_root,
-            debug=debug,
             premise_representation=premise_representation,
         )
         self.threshold = None
@@ -608,56 +602,51 @@ class Coreset(BaseCoreSetRanking):
 
             # Evaluate each threshold
             for threshold in this_thresholds:
-                scores[claim_id][threshold] = mndcg_score(
-                    y_pred=self._rank(
-                        claim_id=claim_id,
-                        premise_ids=premise_ids,
-                        k=k,
-                        threshold=threshold,
-                        # Do not fill for tuning threshold
-                        fill_to_k=False,
-                    ),
-                    data=group,
-                    k=k
-                )
+                for similarity in self.premise_premise_similarities:
+                    scores[claim_id][threshold, similarity] = mndcg_score(
+                        y_pred=self._rank(
+                            claim_id=claim_id,
+                            premise_ids=premise_ids,
+                            k=k,
+                            threshold=threshold,
+                            premise_premise_similarity=normalize_similarity(similarity=similarity),
+                        ),
+                        data=group,
+                        k=k
+                    )
 
-        def _eval_threshold(threshold: float) -> float:
-            # Since the filtering is given by
-            #   [
-            #       p
-            #       for p in premises
-            #       if sim(claim, p) > threshold
-            #   ]
-            # a value t between two adjacency threshold t_low and t_high behaves as the higher threshold
-            # Thus, the score of t is equal to the smallest threshold t' which is larger than t
-            # If t is chosen larger than the largest threshold, no premises remains. Thus, the score is 0.
-            score = 0.0
-            for claim_id in claim_ids:
-                other_threshold = min(
-                    (
-                        other_threshold
-                        for other_threshold in scores[claim_id].keys()
-                        if other_threshold > threshold
-                    ),
-                    default=None,
-                )
-                if other_threshold is not None:
-                    score += scores[claim_id][other_threshold]
-                # else: score += 0
-            # normalize score for interpretable results
-            return score / len(claim_ids)
-
-        # choose threshold
-        if self.debug:
-            thresholds = numpy.asarray(thresholds)
-            _eval_threshold = numpy.vectorize(_eval_threshold)
-            scores = _eval_threshold(thresholds)
-            fold_hash = abs(hash(tuple(sorted(claim_ids))))
-            numpy.save(f"/tmp/scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy",
-                       numpy.stack([thresholds, scores]))
-            self.threshold = thresholds[scores.argmax()]
-        else:
-            self.threshold = max(thresholds, key=_eval_threshold)
+        best_score = float('-inf')
+        for similarity in self.premise_premise_similarities:
+            for threshold in thresholds:
+                # Since the filtering is given by
+                #   [
+                #       p
+                #       for p in premises
+                #       if sim(claim, p) > threshold
+                #   ]
+                # a value t between two adjacency threshold t_low and t_high behaves as the higher threshold
+                # Thus, the score of t is equal to the smallest threshold t' which is larger than t
+                # If t is chosen larger than the largest threshold, no premises remains. Thus, the score is 0.
+                score = 0.0
+                for claim_id in claim_ids:
+                    other_threshold = min(
+                        (
+                            other_threshold
+                            for other_threshold in scores[claim_id, similarity].keys()
+                            if other_threshold > threshold
+                        ),
+                        default=None,
+                    )
+                    if other_threshold is not None:
+                        score += scores[claim_id][other_threshold]
+                    # else: score += 0
+                # normalize score for interpretable results
+                score = score / len(claim_ids)
+                if score > best_score:
+                    best_score = score
+                    self.similarity = similarity
+                    self.threshold = threshold
+        self.similarity = normalize_similarity(similarity=self.similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.threshold is None:
@@ -668,10 +657,10 @@ class Coreset(BaseCoreSetRanking):
             premise_ids=premise_ids,
             k=k,
             threshold=self.threshold,
-            fill_to_k=self.fill_to_k,
+            premise_premise_similarity=self.premise_premise_similarity,
         )
 
-    def _rank(self, claim_id, premise_ids, k, threshold: float, fill_to_k: bool) -> Sequence[str]:
+    def _rank(self, claim_id, premise_ids, k, threshold: float, premise_premise_similarity: Similarity) -> Sequence[str]:
         # filter premise IDs
         premise_ids = [
             premise_id
@@ -690,7 +679,7 @@ class Coreset(BaseCoreSetRanking):
             first_id, similarity = _get_pairwise_similarity_and_first_premise(
                 premise_ids=premise_ids,
                 similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
-                premise_premise_similarity=self.premise_premise_similarity,
+                premise_premise_similarity=premise_premise_similarity,
                 premise_repr=premise_repr,
             )
 
@@ -703,7 +692,7 @@ class Coreset(BaseCoreSetRanking):
             logger.warning("No premise after thresholding.")
             chosen = []
 
-        if fill_to_k and len(chosen) < k:
+        if len(chosen) < k:
             chosen += sorted(
                 set(premise_ids).difference(chosen),
                 key=self.similarity_lookup(for_claim_id=claim_id),
@@ -722,7 +711,6 @@ class BiasedCoreset(BaseCoreSetRanking):
         similarities_dir: str,
         premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
-        debug: bool = False,
         resolution: int = 10,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
@@ -739,7 +727,6 @@ class BiasedCoreset(BaseCoreSetRanking):
             similarities_dir=similarities_dir,
             premise_premise_similarities=premise_premise_similarities,
             cache_root=cache_root,
-            debug=debug,
             premise_representation=premise_representation,
         )
         self.alpha = None
