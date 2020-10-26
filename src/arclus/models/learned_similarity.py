@@ -646,7 +646,7 @@ class Coreset(BaseCoreSetRanking):
                     best_score = score
                     self.similarity = similarity
                     self.threshold = threshold
-        self.similarity = normalize_similarity(similarity=self.similarity)
+        self.premise_premise_similarity = normalize_similarity(similarity=self.similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.threshold is None or self.premise_premise_similarity is None:
@@ -750,7 +750,7 @@ class BiasedCoreset(BaseCoreSetRanking):
                     high_score = score
                     self.similarity = similarity
                     self.alpha = alpha
-        self.similarity = normalize_similarity(similarity=self.similarity)
+        self.premise_premise_similarity = normalize_similarity(similarity=self.similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.alpha is None or self.premise_premise_similarity is None:

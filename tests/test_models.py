@@ -267,13 +267,12 @@ class CoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
 
     cls = Coreset
     kwargs = dict(
-        premise_premise_similarity=CosineSimilarity(),
-        debug=False,
-        fill_to_k=True,
+        premise_premise_similarities=["cos", "l1"],
     )
 
     def _post_fake_instantiation_hook(self):  # noqa: D102
         self.instance.__dict__["threshold"] = None
+        self.instance.__dict__["premise_premise_similarity"] = None
 
 
 class BiasCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
@@ -281,10 +280,10 @@ class BiasCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
 
     cls = BiasedCoreset
     kwargs = dict(
-        premise_premise_similarity=CosineSimilarity(),
+        premise_premise_similarities=["l2", "l1"],
         resolution=10,
-        debug=False,
     )
 
     def _post_fake_instantiation_hook(self):  # noqa: D102
         self.instance.__dict__["alpha"] = None
+        self.instance.__dict__["premise_premise_similarity"] = None
