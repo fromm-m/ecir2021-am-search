@@ -15,7 +15,7 @@ from .base import RankingMethod
 from .zero_shot import _average_scores
 from ..evaluation import mndcg_score
 from ..settings import PREMISES_TEST_FEATURES, PREP_ASSIGNMENTS_TEST, PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
-from ..similarity import CosineSimilarity, Similarity, get_similarity_by_name
+from ..similarity import Similarity
 from ..utils import resolve_num_clusters
 from ..utils_am import inference_no_args, load_bert_model_and_data_no_args
 
@@ -493,6 +493,31 @@ def core_set(
     return result
 
 
+def _get_pairwise_similarity_and_first_premise(
+    premise_ids: Sequence[str],
+    similarity_lookup: Callable[[str], float],
+    premise_premise_similarity: Similarity,
+    premise_repr: torch.FloatTensor,
+) -> Tuple[int, torch.FloatTensor]:
+    """
+    Get pairwise premise similarities and select first premise by premise-claim similarity.
+
+    :param premise_ids:
+        The premise IDs.
+
+    :return:
+        The first premise ID (as local ID, i.e. 0 <= local_premise_id < num_premises), and a
+        (num_premises, num_premises) similarity matrix.
+    """
+    # select first premise as closest to claim
+    first_id = premise_ids.index(max(premise_ids, key=similarity_lookup))
+
+    # compute pair-wise similarity matrix
+    similarity = premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
+
+    return first_id, similarity
+
+
 class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
     """Base class for core set approaches."""
 
@@ -500,7 +525,7 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
         self,
         model_path: str,
         similarities_dir: str,
-        premise_premise_similarity: Similarity = CosineSimilarity(),
+        premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
         debug: bool = False,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
@@ -524,42 +549,9 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
             similarities_dir=similarities_dir,
             premise_representation=premise_representation,
         )
-        if isinstance(premise_premise_similarity, str):
-            premise_premise_similarity = get_similarity_by_name(premise_premise_similarity)
-        self.premise_premise_similarity = premise_premise_similarity
+        self.premise_premise_similarities = premise_premise_similarities
+        self.premise_premise_similarity = None
         self.debug = debug
-
-    def _get_pairwise_similarity_and_first_premise(
-        self,
-        claim_id,
-        premise_ids,
-    ) -> Tuple[int, torch.FloatTensor]:
-        """
-        Get pairwise premise similarities and select first premise by premise-claim similarity.
-
-        :param claim_id:
-            The claim ID.
-        :param premise_ids:
-            The premise IDs.
-
-        :return:
-            The first premise ID (as local ID, i.e. 0 <= local_premise_id < num_premises), and a
-            (num_premises, num_premises) similarity matrix.
-        """
-        # select first premise as closest to claim
-        first_id = premise_ids.index(max(premise_ids, key=self.similarity_lookup(for_claim_id=claim_id)))
-
-        # get premise representations
-        premise_repr = get_premise_representations_for_claim(
-            claim_id=claim_id,
-            premise_ids=premise_ids,
-            source=self.premise_representations,
-        )
-
-        # compute pair-wise similarity matrix
-        similarity = self.premise_premise_similarity.sim(left=premise_repr, right=premise_repr)
-
-        return first_id, similarity
 
 
 class Coreset(BaseCoreSetRanking):
@@ -569,10 +561,9 @@ class Coreset(BaseCoreSetRanking):
         self,
         model_path: str,
         similarities_dir: str,
-        premise_premise_similarity: Similarity = CosineSimilarity(),
+        premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
         debug: bool = False,
-        fill_to_k: bool = False,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -582,20 +573,17 @@ class Coreset(BaseCoreSetRanking):
             Directory where the fine-tuned bert similarity model checkpoint is located.
         :param cache_root:
             The directory where temporary BERT inference files are stored.
-        :param fill_to_k:
-            Whether to fill up with more candidates (according to KNN heuristic), if less than k candidates remain
-            after thresholding.
         """
         super().__init__(
             model_path=model_path,
             similarities_dir=similarities_dir,
-            premise_premise_similarity=premise_premise_similarity,
+            premise_premise_similarities=premise_premise_similarities,
             cache_root=cache_root,
             debug=debug,
             premise_representation=premise_representation,
         )
         self.threshold = None
-        self.fill_to_k = fill_to_k
+        self.fill_to_k = None
 
     def fit(
         self,
@@ -692,9 +680,18 @@ class Coreset(BaseCoreSetRanking):
         ]
 
         if len(premise_ids) > 0:
-            first_id, similarity = self._get_pairwise_similarity_and_first_premise(
+            # get premise representations
+            premise_repr = get_premise_representations_for_claim(
                 claim_id=claim_id,
                 premise_ids=premise_ids,
+                source=self.premise_representations,
+            )
+
+            first_id, similarity = _get_pairwise_similarity_and_first_premise(
+                premise_ids=premise_ids,
+                similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
+                premise_premise_similarity=self.premise_premise_similarity,
+                premise_repr=premise_repr,
             )
 
             # apply coreset
@@ -723,7 +720,7 @@ class BiasedCoreset(BaseCoreSetRanking):
         self,
         model_path: str,
         similarities_dir: str,
-        premise_premise_similarity: Similarity = CosineSimilarity(),
+        premise_premise_similarities: Collection[Union[str, Similarity]],
         cache_root: Optional[str] = None,
         debug: bool = False,
         resolution: int = 10,
@@ -740,7 +737,7 @@ class BiasedCoreset(BaseCoreSetRanking):
         super().__init__(
             model_path=model_path,
             similarities_dir=similarities_dir,
-            premise_premise_similarity=premise_premise_similarity,
+            premise_premise_similarities=premise_premise_similarities,
             cache_root=cache_root,
             debug=debug,
             premise_representation=premise_representation,
@@ -781,10 +778,19 @@ class BiasedCoreset(BaseCoreSetRanking):
     def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float) -> Sequence[str]:
         premise_ids = list(premise_ids)
 
-        # select first premise as closest to claim and get pairwise premise similarities
-        first_id, premise_premise_similarity = self._get_pairwise_similarity_and_first_premise(
+        # get premise representations
+        premise_repr = get_premise_representations_for_claim(
             claim_id=claim_id,
             premise_ids=premise_ids,
+            source=self.premise_representations,
+        )
+
+        # select first premise as closest to claim and get pairwise premise similarities
+        first_id, premise_premise_similarity = _get_pairwise_similarity_and_first_premise(
+            premise_ids=premise_ids,
+            similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
+            premise_premise_similarity=self.premise_premise_similarity,
+            premise_repr=premise_repr,
         )
 
         claim_premise_similarity = torch.as_tensor(
