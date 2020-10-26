@@ -649,7 +649,7 @@ class Coreset(BaseCoreSetRanking):
         self.similarity = normalize_similarity(similarity=self.similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        if self.threshold is None:
+        if self.threshold is None or self.premise_premise_similarity is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
         return self._rank(
@@ -737,32 +737,28 @@ class BiasedCoreset(BaseCoreSetRanking):
         training_data: pandas.DataFrame,
         k: int,
     ):
-        def _evaluate_alpha(alpha: float) -> float:
-            score = 0.0
-            for claim_id, group in training_data.groupby(by="claim_id"):
-                premise_ids = group["premise_id"].tolist()
-                y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha)
-                score += mndcg_score(y_pred=y_pred, data=group, k=k)
-            return score / len(training_data["claim_id"].unique())
-
-        # compute scores for all alpha values
-        alphas = numpy.linspace(start=0, stop=1, num=self.resolution)
-        if self.debug:
-            _eval_alpha = numpy.vectorize(_evaluate_alpha)
-            scores = _eval_alpha(alphas)
-            fold_hash = abs(hash(tuple(sorted(training_data["claim_id"].unique()))))
-            numpy.save(f"/tmp/convex_scores_k{k}_{self.premise_premise_similarity}_{fold_hash}.npy", numpy.stack([alphas, scores]))
-            self.alpha = alphas[scores.argmax()]
-        else:
-            self.alpha = max(alphas, key=_evaluate_alpha)
+        high_score = float('-inf')
+        for alpha in numpy.linspace(start=0, stop=1, num=self.resolution):
+            for similarity in self.premise_premise_similarities:
+                score = 0.0
+                for claim_id, group in training_data.groupby(by="claim_id"):
+                    premise_ids = group["premise_id"].tolist()
+                    y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha)
+                    score += mndcg_score(y_pred=y_pred, data=group, k=k)
+                score = score / len(training_data["claim_id"].unique())
+                if score > high_score:
+                    high_score = score
+                    self.similarity = similarity
+                    self.alpha = alpha
+        self.similarity = normalize_similarity(similarity=self.similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        if self.alpha is None:
+        if self.alpha is None or self.premise_premise_similarity is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
 
-        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=self.alpha)
+        return self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=self.alpha, premise_premise_similarity=self.premise_premise_similarity)
 
-    def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float) -> Sequence[str]:
+    def _rank(self, claim_id: int, premise_ids: Sequence[str], k: int, alpha: float, premise_premise_similarity: Similarity) -> Sequence[str]:
         premise_ids = list(premise_ids)
 
         # get premise representations
@@ -776,7 +772,7 @@ class BiasedCoreset(BaseCoreSetRanking):
         first_id, premise_premise_similarity = _get_pairwise_similarity_and_first_premise(
             premise_ids=premise_ids,
             similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
-            premise_premise_similarity=self.premise_premise_similarity,
+            premise_premise_similarity=premise_premise_similarity,
             premise_repr=premise_repr,
         )
 
