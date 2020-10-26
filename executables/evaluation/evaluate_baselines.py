@@ -37,6 +37,12 @@ def main():
         PremiseRepresentationEnum.learned_similarity_last_layer,
         PremiseRepresentationEnum.learned_similarity_claim_similarities,
     ]
+    CLUSTER_RATIOS = (
+        0.25,
+        0.5,
+        1.0,
+        None,
+    )
     configs = [
                   # 0. Related Work: Dumani
                   dict(
@@ -55,11 +61,10 @@ def main():
                   # 2. zero_shot_cluster_knn
                   dict(
                       name='zero_shot_cluster_knn',
-                      cluster_ratio=cluster_ratio,
+                      cluster_ratios=CLUSTER_RATIOS,
                       cluster_representative=cluster_representative,
                       similarity=similarity,
                   )
-                  for cluster_ratio in (0.25, 0.5, 1.0, None)
                   for cluster_representative in ('closest-to-center', 'closest-to-claim')
                   for similarity in ('l2', 'l1', 'cos')
               ] + [
@@ -76,13 +81,12 @@ def main():
                   dict(
                       name='learned_similarity_cluster_knn',
                       softmax=softmax,
-                      cluster_ratio=cluster_ratio,
+                      cluster_ratios=CLUSTER_RATIOS,
                       similarities_dir=similarities,
                       model_path=model_path,
 
                   )
                   for softmax in (False, True)
-                  for cluster_ratio in (0.25, 0.5, 1.0, None)
               ] + [
                   # 5. learned_similarity_cluster_knn
                   dict(
