@@ -221,7 +221,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         self.cluster_representatives = cluster_representatives
         self.cluster_representative = None
         self.ratios = cluster_ratios
-        self.ratio = None
+        self.ratio = "no-ratio"
 
     def fit(
         self,
@@ -254,7 +254,7 @@ class ZeroShotClusterKNN(ZeroShotRanking):
         return self
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
-        if self.ratio is None or self.cluster_representative is None or self.similarity is None:
+        if self.ratio == "no-ratio" or self.cluster_representative is None or self.similarity is None:
             raise ValueError(f"{self.__class__.__name__} must be fit before rank is called.")
         claim_repr, premise_repr = self._get_representations(claim_id, premise_ids)
         cluster_assignment, cluster_centers = _cluster_representations(premise_repr=premise_repr, ratio=self.ratio, k=k)
