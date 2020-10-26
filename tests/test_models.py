@@ -9,9 +9,9 @@ import numpy
 import pandas
 import torch
 
-from arclus.models import get_baseline_method_by_name
+from arclus.models import LearnedSimilarityClusterKNN, get_baseline_method_by_name
 from arclus.models.base import RankingMethod
-from arclus.models.learned_similarity import BiasedCoreset, Coreset, core_set, get_claim_similarity_premise_representations, get_query_claim_similarities
+from arclus.models.learned_similarity import BiasedCoreset, Coreset, LearnedSimilarityKNN, core_set, get_claim_similarity_premise_representations, get_query_claim_similarities
 from arclus.models.zero_shot import ZeroShotClusterKNN, ZeroShotKNN
 from arclus.settings import PREP_TEST_PRODUCT_SIMILARITIES, PREP_TEST_SIMILARITIES, PREP_TEST_STATES
 from arclus.similarity import LpSimilarity
@@ -305,4 +305,23 @@ class BiasedCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase)
     kwargs = dict(
         premise_premise_similarities=["l2", "l1"],
         resolution=10,
+    )
+
+
+class LearnedSimilarityKNNTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
+    """Test for LearnedSimilarityKNN ranking method."""
+
+    cls = LearnedSimilarityKNN
+    kwargs = dict(
+        softmax=True,
+    )
+
+
+class LearnedSimilarityClusterKNNTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
+    """Test for LearnedSimilarityClusterKNN ranking method."""
+
+    cls = LearnedSimilarityClusterKNN
+    kwargs = dict(
+        softmax=True,
+        cluster_ratios=[0.2, 0.4],
     )
