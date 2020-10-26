@@ -275,7 +275,7 @@ class CoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
         self.instance.__dict__["premise_premise_similarity"] = None
 
 
-class BiasCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
+class BiasedCoreSetTests(PrecomputedSimilarityDependentTests, unittest.TestCase):
     """Test for BiasedCoreSet ranking method."""
 
     cls = BiasedCoreset
