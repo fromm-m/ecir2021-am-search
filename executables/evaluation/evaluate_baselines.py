@@ -148,7 +148,7 @@ def main():
             mlflow.log_params(params=flatten_dict(log_config))
 
             # Instantiate method
-            method = get_baseline_method_by_name(**real_config)
+            method = get_baseline_method_by_name(**config)
 
             # Evaluate method
             result_df = evaluate_ranking_method(method=method, k=args.k)
