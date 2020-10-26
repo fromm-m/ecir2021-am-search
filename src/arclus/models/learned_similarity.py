@@ -676,7 +676,7 @@ class Coreset(BaseCoreSetRanking):
                 source=self.premise_representations,
             )
 
-            first_id, similarity = _get_pairwise_similarity_and_first_premise(
+            first_id, similarity_matrix = _get_pairwise_similarity_and_first_premise(
                 premise_ids=premise_ids,
                 similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
                 premise_premise_similarity=premise_premise_similarity,
@@ -684,7 +684,7 @@ class Coreset(BaseCoreSetRanking):
             )
 
             # apply coreset
-            local_ids = core_set(similarity=similarity, first_id=first_id, k=k)
+            local_ids = core_set(similarity=similarity_matrix, first_id=first_id, k=k)
 
             # convert back to premise_ids
             chosen = [premise_ids[i] for i in local_ids]
@@ -740,17 +740,18 @@ class BiasedCoreset(BaseCoreSetRanking):
         high_score = float('-inf')
         for alpha in numpy.linspace(start=0, stop=1, num=self.resolution):
             for similarity in self.premise_premise_similarities:
+                similarity_instance = normalize_similarity(similarity=similarity)
                 score = 0.0
                 for claim_id, group in training_data.groupby(by="claim_id"):
                     premise_ids = group["premise_id"].tolist()
-                    y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha)
+                    y_pred = self._rank(claim_id=claim_id, premise_ids=premise_ids, k=k, alpha=alpha, premise_premise_similarity=similarity_instance)
                     score += mndcg_score(y_pred=y_pred, data=group, k=k)
                 score = score / len(training_data["claim_id"].unique())
                 if score > high_score:
                     high_score = score
-                    self.similarity = similarity
+                    self.premise_premise_similarity = similarity
                     self.alpha = alpha
-        self.premise_premise_similarity = normalize_similarity(similarity=self.similarity)
+        self.premise_premise_similarity = normalize_similarity(similarity=self.premise_premise_similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.alpha is None or self.premise_premise_similarity is None:
@@ -769,7 +770,7 @@ class BiasedCoreset(BaseCoreSetRanking):
         )
 
         # select first premise as closest to claim and get pairwise premise similarities
-        first_id, premise_premise_similarity = _get_pairwise_similarity_and_first_premise(
+        first_id, similarity_matrix = _get_pairwise_similarity_and_first_premise(
             premise_ids=premise_ids,
             similarity_lookup=self.similarity_lookup(for_claim_id=claim_id),
             premise_premise_similarity=premise_premise_similarity,
@@ -783,7 +784,7 @@ class BiasedCoreset(BaseCoreSetRanking):
 
         # apply coreset
         local_ids = core_set(
-            similarity=alpha * premise_premise_similarity,
+            similarity=alpha * similarity_matrix,
             first_id=first_id,
             k=k,
             premise_bias=(1 - alpha) * claim_premise_similarity,
