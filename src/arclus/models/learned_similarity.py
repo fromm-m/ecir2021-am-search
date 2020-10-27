@@ -560,10 +560,10 @@ class Coreset(BaseCoreSetRanking):
 
     def __init__(
         self,
-        model_path: str,
-        similarities_dir: str,
+        model_path: pathlib.Path,
+        similarities_dir: pathlib.Path,
         premise_premise_similarities: Collection[Union[str, Similarity]],
-        cache_root: Optional[str] = None,
+        cache_root: Optional[pathlib.Path] = None,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -712,10 +712,10 @@ class BiasedCoreset(BaseCoreSetRanking):
 
     def __init__(
         self,
-        model_path: str,
-        similarities_dir: str,
+        model_path: pathlib.Path,
+        similarities_dir: pathlib.Path,
         premise_premise_similarities: Collection[Union[str, Similarity]],
-        cache_root: Optional[str] = None,
+        cache_root: Optional[pathlib.Path] = None,
         resolution: int = 10,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
