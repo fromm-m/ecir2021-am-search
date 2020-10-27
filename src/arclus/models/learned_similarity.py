@@ -173,6 +173,7 @@ def _load_or_compute_similarities(
     """
     # Extend similarities directory by model id
     similarities_dir = similarities_dir / model_path.name
+    similarities_dir.mkdir(exist_ok=True, parents=True)
     logger.info(f"Using similarities from {similarities_dir}.")
 
     if product:
