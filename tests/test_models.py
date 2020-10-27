@@ -211,14 +211,12 @@ class CoreSetUtilityTests(unittest.TestCase):
         """Randomized test."""
         n = 10
         similarity = torch.rand(n, n)
-        first_id = random.randrange(n)
         k = 3
         result = core_set(similarity=similarity, k=k)
         assert isinstance(result, Sequence)
         assert len(result) == k
         assert len(set(result)) == len(result)
         assert all(0 <= i < n for i in result)
-        assert result[0] == first_id
 
     def test_manual(self):
         """Hand-curated test."""
@@ -232,7 +230,10 @@ class CoreSetUtilityTests(unittest.TestCase):
             dtype=torch.float32,
         )
         similarity = LpSimilarity(p=2).sim(vectors, vectors)
-        result = core_set(similarity=similarity, k=3)
+        # deterministic start
+        preference = torch.zeros(4)
+        preference[0] = float("inf")
+        result = core_set(similarity=similarity, k=3, preference=preference)
         assert result == [0, 2, 3]
 
 
