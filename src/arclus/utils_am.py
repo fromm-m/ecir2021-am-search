@@ -2,7 +2,7 @@ import logging
 import pathlib
 import random
 from logging import Logger
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -257,7 +257,7 @@ def convert_examples_to_features(
 class SimilarityProcessor(DataProcessor):
     """Processor for the AM data set."""
 
-    def get_examples(self, data_dir: pathlib.Path, product: bool):
+    def get_examples(self, data_dir: pathlib.Path, product: bool) -> Sequence[InputExample]:
         df = self.read_tsv(data_dir)
         if product:
             return self._create_product_examples(df)
@@ -273,7 +273,7 @@ class SimilarityProcessor(DataProcessor):
         return pd.read_csv(input_file, sep=";")
 
     @staticmethod
-    def _create_examples(df):
+    def _create_examples(df: pd.DataFrame) -> Sequence[InputExample]:
         """Creates examples for the training and test sets."""
         examples = []
         for index, row in df.iterrows():
@@ -291,7 +291,7 @@ class SimilarityProcessor(DataProcessor):
         return examples
 
     @staticmethod
-    def _create_product_examples(df):
+    def _create_product_examples(df: pd.DataFrame) -> Sequence[InputExample]:
         """Creates examples for the training and test sets."""
         examples = []
         claim_ids = df.resultClaimID.to_list()
