@@ -689,8 +689,12 @@ class Coreset(BaseCoreSetRanking):
                 premise_repr=premise_repr,
             )
 
+            # set start
+            preference = torch.zeros(len(filtered_premise_ids))
+            preference[first_id] = float("inf")
+
             # apply coreset
-            local_ids = core_set(similarity=similarity_matrix, k=k)
+            local_ids = core_set(similarity=similarity_matrix, k=k, preference=preference)
 
             # convert back to premise_ids
             chosen = [filtered_premise_ids[i] for i in local_ids]
