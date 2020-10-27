@@ -4,7 +4,7 @@ import pathlib
 from abc import ABC
 from collections import defaultdict
 from operator import itemgetter
-from typing import Any, Callable, Collection, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Collection, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy
 import pandas
@@ -592,7 +592,7 @@ class Coreset(BaseCoreSetRanking):
         # we exploit that a change occurs only, if a threshold surpasses a measured similarity value
         # since the total score is the sum over the scores for individual query claims, we can independently compute
         # the score for each query claim at all points where the score would change, and "interpolate" the rest.
-        scores = defaultdict(dict)
+        scores: Dict[int, Dict[Similarity, Dict[float, float]]] = defaultdict(dict)
         thresholds = set()
         claim_ids = training_data["claim_id"].unique().tolist()
         for claim_id, group in training_data.groupby(by="claim_id"):
@@ -606,9 +606,10 @@ class Coreset(BaseCoreSetRanking):
             thresholds.update(this_thresholds)
 
             # Evaluate each threshold
-            for threshold in this_thresholds:
-                for similarity in self.premise_premise_similarities:
-                    scores[claim_id][threshold, similarity] = mndcg_score(
+            for similarity in self.premise_premise_similarities:
+                scores[claim_id][similarity] = dict()
+                for threshold in this_thresholds:
+                    scores[claim_id][similarity][threshold] = mndcg_score(
                         y_pred=self._rank(
                             claim_id=claim_id,
                             premise_ids=premise_ids,
@@ -637,13 +638,13 @@ class Coreset(BaseCoreSetRanking):
                     other_threshold = min(
                         (
                             other_threshold
-                            for other_threshold in scores[claim_id, similarity].keys()
+                            for other_threshold in scores[claim_id][similarity].keys()
                             if other_threshold > threshold
                         ),
                         default=None,
                     )
                     if other_threshold is not None:
-                        score += scores[claim_id][other_threshold]
+                        score += scores[claim_id][similarity][other_threshold]
                     # else: score += 0
                 # normalize score for interpretable results
                 score = score / len(claim_ids)
