@@ -444,21 +444,18 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
 
 def core_set(
     similarity: torch.FloatTensor,
-    first_id: int,
     k: int,
-    premise_bias: Optional[torch.FloatTensor] = None,
+    preference: Optional[torch.FloatTensor] = None,
 ) -> Sequence[int]:
     """
     Coreset method based on full pairwise similarity matrix.
 
     :param similarity: shape: (n, n)
         The full pairwise similarity/score matrix. Larger values indicate better fit.
-    :param first_id: >=0, <n
-        The first chosen ID.
     :param k: >0
         The number of candidates to choose.
-    :param premise_bias: shape: (n,)
-        A bias for premise.
+    :param preference: shape: (n,)
+        An optional preference value for premises.
 
     :return:
         An ordered list of k selected candidate IDs.
@@ -467,27 +464,27 @@ def core_set(
     assert similarity.shape == (n, n)
     k = min(k, n)
 
-    result = [first_id]
+    result = []
+
+    if preference is None:
+        preference = similarity.new_zeros(n)
 
     chosen_mask = torch.zeros(n, dtype=torch.bool, device=similarity.device)
-    chosen_mask[first_id] = True
+    indices = torch.arange(n, device=similarity.device)
 
-    for i in range(1, k):
-        # select similarity from candidates to chosen, shape: (num_cand, num_chosen)
-        score = similarity[chosen_mask].t()[~chosen_mask]
+    for i in range(k):
+        # select premise preferences
+        score = preference[~chosen_mask]
 
-        # largest similarity to chosen, shape: (num_cand)
-        candidate_score = score.max(dim=-1).values
+        # penalize large similarity to already chosen premises
+        if i > 0:
+            score = score - similarity[chosen_mask].t()[~chosen_mask].max(dim=-1).values
 
-        # apply bias
-        if premise_bias is not None:
-            candidate_score = candidate_score - premise_bias[~chosen_mask]
-
-        # choose highest score
-        local_next_id = candidate_score.argmin()
+        # greedy choice
+        local_next_id = score.argmax()
 
         # convert to global id
-        next_id = torch.arange(n, device=similarity.device)[~chosen_mask][local_next_id].item()
+        next_id = indices[~chosen_mask][local_next_id].item()
 
         # update mask
         chosen_mask[next_id] = True
@@ -693,7 +690,7 @@ class Coreset(BaseCoreSetRanking):
             )
 
             # apply coreset
-            local_ids = core_set(similarity=similarity_matrix, first_id=first_id, k=k)
+            local_ids = core_set(similarity=similarity_matrix, k=k)
 
             # convert back to premise_ids
             chosen = [filtered_premise_ids[i] for i in local_ids]
@@ -794,9 +791,8 @@ class BiasedCoreset(BaseCoreSetRanking):
         # apply coreset
         local_ids = core_set(
             similarity=alpha * similarity_matrix,
-            first_id=first_id,
             k=k,
-            premise_bias=(1 - alpha) * claim_premise_similarity,
+            preference=(1 - alpha) * claim_premise_similarity,
         )
 
         # convert back to premise_ids

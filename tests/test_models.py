@@ -213,7 +213,7 @@ class CoreSetUtilityTests(unittest.TestCase):
         similarity = torch.rand(n, n)
         first_id = random.randrange(n)
         k = 3
-        result = core_set(similarity=similarity, first_id=first_id, k=k)
+        result = core_set(similarity=similarity, k=k)
         assert isinstance(result, Sequence)
         assert len(result) == k
         assert len(set(result)) == len(result)
@@ -232,7 +232,7 @@ class CoreSetUtilityTests(unittest.TestCase):
             dtype=torch.float32,
         )
         similarity = LpSimilarity(p=2).sim(vectors, vectors)
-        result = core_set(similarity=similarity, first_id=0, k=3)
+        result = core_set(similarity=similarity, k=3)
         assert result == [0, 2, 3]
 
 
