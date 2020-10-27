@@ -100,7 +100,7 @@ def load_and_cache_examples(
     model_type: str,
     cache_root: Optional[pathlib.Path] = None,
     product: bool = False,
-):
+) -> Tuple[TensorDataset, Sequence[InputExample]]:
     if cache_root is None:
         cache_root = pathlib.Path("../../data/preprocessed")
     processor = processors[task]()
