@@ -105,18 +105,12 @@ def load_and_cache_examples(
 ):
     processor = processors[task]()
     output_mode = output_modes[task]
-    # if args.active_learning:
 
     # Load data features from cache or dataset file
     # if active learning, the train data will be saved inside each learning iteration directory
     cached_features_file = os.path.join(cache_root, "cached_{}_{}_{}".format("inference", list(
         filter(None, model_path.split("/"))).pop(), str(task), ), )
 
-    # if os.path.exists(cached_features_file) and not overwrite_cache:
-    #    logger.info("Loading features from cached file %s", cached_features_file)
-    #    features = torch.load(cached_features_file)
-    #    examples = None
-    # else:
     logger.info("Creating features from dataset file at %s", data_dir)
     label_list = processor.get_labels()
     examples = processor.get_examples(data_dir=data_dir, product=product)
@@ -143,11 +137,6 @@ def load_and_cache_examples(
     all_token_type_ids = torch.as_tensor(
         [f.token_type_ids for f in features], dtype=torch.long
     )
-    #    if output_mode == "classification":
-    #        all_labels = torch.tensor([f.label for f in features], dtype=torch.long)
-    #    elif output_mode == "regression":
-    #        all_labels = torch.tensor([f.label for f in features], dtype=torch.float)
-
     dataset = TensorDataset(
         all_input_ids, all_attention_mask, all_token_type_ids
     )
