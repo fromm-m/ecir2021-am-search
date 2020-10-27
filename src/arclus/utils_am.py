@@ -1,8 +1,8 @@
 import logging
-import os
+import pathlib
 import random
 from logging import Logger
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 def load_bert_model_and_data_no_args(
-    model_path: str,
+    model_path: pathlib.Path,
     task_name: str,
     batch_size: int,
-    data_dir: str,
+    data_dir: pathlib.Path,
     overwrite_cache: bool,
     max_seq_length: int,
     model_type: str,
-    cache_root: str,
+    cache_root: pathlib.Path,
     product: bool,
 ) -> Tuple[DataLoader, TensorDataset, BertForSequenceClassification, List[Any]]:
     tokenizer = BertTokenizer.from_pretrained(model_path)
@@ -95,21 +95,21 @@ def set_seed(args):
 def load_and_cache_examples(
     task: str,
     tokenizer: BertTokenizer,
-    model_path: str,
-    data_dir: str,
+    model_path: pathlib.Path,
+    data_dir: pathlib.Path,
     overwrite_cache: bool,
     max_seq_length: int,
     model_type: str,
-    cache_root: str = "../../data/preprocessed",
+    cache_root: Optional[pathlib.Path] = None,
     product: bool = False,
 ):
+    if cache_root is None:
+        cache_root = pathlib.Path("../../data/preprocessed")
     processor = processors[task]()
     output_mode = output_modes[task]
 
     # Load data features from cache or dataset file
-    # if active learning, the train data will be saved inside each learning iteration directory
-    cached_features_file = os.path.join(cache_root, "cached_{}_{}_{}".format("inference", list(
-        filter(None, model_path.split("/"))).pop(), str(task), ), )
+    cached_features_file = cache_root / f"cached_inference_{model_path.name}_{task}"
 
     logger.info("Creating features from dataset file at %s", data_dir)
     label_list = processor.get_labels()
@@ -259,7 +259,7 @@ def convert_examples_to_features(
 class SimilarityProcessor(DataProcessor):
     """Processor for the AM data set."""
 
-    def get_examples(self, data_dir: str, product: bool):
+    def get_examples(self, data_dir: pathlib.Path, product: bool):
         df = self.read_tsv(data_dir)
         if product:
             return self._create_product_examples(df)
@@ -271,7 +271,7 @@ class SimilarityProcessor(DataProcessor):
         return ["unsimilar", "similar"]
 
     @staticmethod
-    def read_tsv(input_file):
+    def read_tsv(input_file: pathlib.Path) -> pd.DataFrame:
         return pd.read_csv(input_file, sep=";")
 
     @staticmethod

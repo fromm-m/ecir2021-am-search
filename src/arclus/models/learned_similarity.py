@@ -171,6 +171,9 @@ def _load_or_compute_similarities(
     :return:
         A mapping (premise_id, claim_id) -> similarity.
     """
+    if cache_root is None:
+        cache_root = pathlib.Path('/tmp/arclus/bert')
+
     # Extend similarities directory by model id
     similarities_dir = similarities_dir / model_path.name
     similarities_dir.mkdir(exist_ok=True, parents=True)
@@ -307,8 +310,6 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
         :param cache_root:
             The directory where temporary BERT inference files are stored.
         """
-        if cache_root is None:
-            cache_root = '/tmp/arclus/bert'
         self.precomputed_similarities, self.premise_representations = _load_or_compute_similarities(
             cache_root=cache_root,
             model_path=model_path,
