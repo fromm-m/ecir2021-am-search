@@ -200,7 +200,6 @@ def _load_or_compute_similarities(
             task_name="SIM",
             batch_size=batch_size,
             data_dir=PREP_ASSIGNMENTS_TEST,
-            overwrite_cache=True,
             max_seq_length=512,
             model_type="bert",
             cache_root=cache_root,

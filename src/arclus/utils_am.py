@@ -24,7 +24,6 @@ def load_bert_model_and_data_no_args(
     task_name: str,
     batch_size: int,
     data_dir: pathlib.Path,
-    overwrite_cache: bool,
     max_seq_length: int,
     model_type: str,
     cache_root: pathlib.Path,
