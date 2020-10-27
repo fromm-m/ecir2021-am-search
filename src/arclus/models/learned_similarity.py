@@ -622,6 +622,7 @@ class Coreset(BaseCoreSetRanking):
                     )
 
         best_score = float('-inf')
+        best_similarity = best_threshold = None
         for similarity in self.premise_premise_similarities:
             for threshold in thresholds:
                 # Since the filtering is given by
@@ -650,9 +651,11 @@ class Coreset(BaseCoreSetRanking):
                 score = score / len(claim_ids)
                 if score > best_score:
                     best_score = score
-                    self.similarity = similarity
-                    self.threshold = threshold
-        self.premise_premise_similarity = normalize_similarity(similarity=self.similarity)
+                    best_similarity = similarity
+                    best_threshold = threshold
+        assert best_threshold is not None
+        self.threshold = best_threshold
+        self.premise_premise_similarity = normalize_similarity(similarity=best_similarity)
 
     def rank(self, claim_id: int, premise_ids: Sequence[str], k: int) -> Sequence[str]:  # noqa: D102
         if self.threshold is None or self.premise_premise_similarity is None:
