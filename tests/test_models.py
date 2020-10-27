@@ -270,17 +270,20 @@ class PrecomputedSimilarityDependentTests(RankingTests):
         self.tmp_dir = tempfile.TemporaryDirectory()
         tmp_path = pathlib.Path(self.tmp_dir.name)
 
+        model_name = "abc123"
+        model_path = tmp_path / model_name
+
         # create dummy precomputed similarities
-        product_path = tmp_path / PREP_TEST_PRODUCT_SIMILARITIES
+        product_path = tmp_path / model_name / PREP_TEST_PRODUCT_SIMILARITIES
         torch.save(_generate_random_product_similarities(premise_ids=self.all_premise_ids, result_claim_ids=self.all_result_claim_ids), product_path)
         premise_query_claim_pairs = set(zip(*[self.training_data[col] for col in ["premise_id", "claim_id"]]))
-        pair_path = tmp_path / PREP_TEST_SIMILARITIES
+        pair_path = tmp_path / model_name / PREP_TEST_SIMILARITIES
         torch.save(_generate_random_pair_similarities(premise_claim_pairs=premise_query_claim_pairs), pair_path)
-        state_path = tmp_path / PREP_TEST_STATES
+        state_path = tmp_path / model_name / PREP_TEST_STATES
         torch.save(_generate_random_premise_states(premise_claim_pairs=premise_query_claim_pairs), state_path)
 
         kwargs["similarities_dir"] = tmp_path
-        kwargs["model_path"] = None
+        kwargs["model_path"] = model_path
 
         return kwargs
 
