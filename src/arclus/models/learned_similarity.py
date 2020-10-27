@@ -151,8 +151,8 @@ def _premise_cluster_filtered(
 
 
 def _load_or_compute_similarities(
-    cache_root: str,
-    model_path: str,
+    cache_root: pathlib.Path,
+    model_path: pathlib.Path,
     similarities_dir: pathlib.Path,
     softmax: bool = True,
     product: bool = True,
@@ -171,6 +171,10 @@ def _load_or_compute_similarities(
     :return:
         A mapping (premise_id, claim_id) -> similarity.
     """
+    # Extend similarities directory by model id
+    similarities_dir = similarities_dir / model_path.name
+    logger.info(f"Using similarities from {similarities_dir}.")
+
     if product:
         buffer_path = similarities_dir / PREP_TEST_PRODUCT_SIMILARITIES
     else:
