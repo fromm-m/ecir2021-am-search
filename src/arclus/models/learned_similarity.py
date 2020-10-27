@@ -291,9 +291,9 @@ class LearnedSimilarityBasedMethod(RankingMethod, ABC):
     def __init__(
         self,
         softmax: bool,
-        model_path: str,
-        similarities_dir: str,
-        cache_root: Optional[str] = None,
+        model_path: pathlib.Path,
+        similarities_dir: pathlib.Path,
+        cache_root: Optional[pathlib.Path] = None,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
         premise_representation_kwargs: Optional[Mapping[str, Any]] = None,
     ):
@@ -364,9 +364,9 @@ class LearnedSimilarityClusterKNN(LearnedSimilarityBasedMethod):
         self,
         cluster_ratios: Sequence[float],
         softmax: bool,
-        model_path: str,
-        similarities_dir: str,
-        cache_root: Optional[str] = None,
+        model_path: pathlib.Path,
+        similarities_dir: pathlib.Path,
+        cache_root: Optional[pathlib.Path] = None,
         premise_representations: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """
@@ -528,10 +528,10 @@ class BaseCoreSetRanking(LearnedSimilarityBasedMethod, ABC):
 
     def __init__(
         self,
-        model_path: str,
-        similarities_dir: str,
+        model_path: pathlib.Path,
+        similarities_dir: pathlib.Path,
         premise_premise_similarities: Collection[Union[str, Similarity]],
-        cache_root: Optional[str] = None,
+        cache_root: Optional[pathlib.Path] = None,
         premise_representation: PremiseRepresentationEnum = PremiseRepresentationEnum.learned_similarity_last_layer,
     ):
         """

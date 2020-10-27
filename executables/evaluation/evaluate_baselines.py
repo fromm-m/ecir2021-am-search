@@ -52,7 +52,7 @@ def main():
     args = parser.parse_args()
     similarities = DATA_ROOT / 'similarities'
     softmax = True
-    model_path = '/nfs/data3/fromm/argument_clustering/models/c26817b78afc4e95ab86793d7390081b'
+    model_path = pathlib.Path('/nfs/data3/fromm/argument_clustering/models/c26817b78afc4e95ab86793d7390081b')
     configs = [
                   # 0. Related Work: Dumani
                   dict(
