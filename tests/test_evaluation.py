@@ -4,7 +4,7 @@ import unittest
 import numpy
 import pandas
 
-from arclus.evaluation import mdcg_score, mndcg_score, optimal_mdcg_score
+from arclus.evaluation import mdcg_score, mndcg_score, ndcg_score_wrapper, optimal_mdcg_score
 from arclus.utils import generate_random_words
 
 
@@ -42,6 +42,19 @@ class MNDCGTests(unittest.TestCase):
 
         # check value range
         assert 0 <= score <= 1.
+
+    def test_ndcg_score(self):
+        normal = ndcg_score_wrapper(
+            y_pred=self.y_pred,
+            data=self.data,
+            k=self.k,
+        )
+        modified = mndcg_score(
+            y_pred=self.y_pred,
+            data=self.data,
+            k=self.k,
+        )
+        assert modified <= normal
 
     def test_mdcg_score_manual(self):
         """Test mdcg_score with a manual example."""

@@ -2,9 +2,10 @@
 import math
 from typing import Sequence
 
+import numpy
 import pandas
 import torch
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, ndcg_score
 
 
 def accuracy(
@@ -110,3 +111,33 @@ def mndcg_score(
     score = mdcg_score(y_pred=y_pred, data=data, k=k)
     assert score <= opt_score
     return score / opt_score
+
+
+def ndcg_score_wrapper(
+    y_pred: Sequence[str],
+    data: pandas.DataFrame,
+    k: int,
+) -> float:
+    """
+    Calculate the NDCG score.
+
+    :param y_pred:
+        The predicted ranking, a sequence of premise IDs.
+    :param data:
+        The data, comprises at least columns "premise_id", "relevance".
+    :param k: >0
+        The cut-off parameter.
+
+    :return:
+        The NDCG score, a scalar between 0 and 1 (both incl.).
+    """
+    # true relevance
+    y_true = data["relevance"].fillna(0).values
+
+    # sklearn expects scores as input, not the sorted list -> transform to score = position in list
+    position = dict((premise, i) for i, premise in enumerate(y_pred))
+    y_score = numpy.zeros_like(y_true)
+    for i, premise in enumerate(data["premise_id"].tolist()):
+        if premise in position:
+            y_score[i] = len(y_pred) - position[premise]
+    return ndcg_score(y_true=y_true[None, :], y_score=y_score[None, :], k=k)

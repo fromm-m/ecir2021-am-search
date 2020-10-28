@@ -3,7 +3,7 @@ from typing import Collection, Union
 import pandas
 from tqdm import tqdm
 
-from .evaluation import mndcg_score
+from .evaluation import mndcg_score, ndcg_score_wrapper
 from .models import RankingMethod
 from .utils import load_assignments_with_numeric_relevance
 
@@ -48,6 +48,7 @@ def evaluate_ranking_method(
                 k=kk,
             )
             # evaluate ranking
-            score = mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)
-            result_data.append((query_claim_id, kk, score))
-    return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG"])
+            normal = ndcg_score_wrapper(y_pred=predicted_ranking, data=queries, k=kk)
+            modified = mndcg_score(y_pred=predicted_ranking, data=queries, k=kk)
+            result_data.append((query_claim_id, kk, modified, normal))
+    return pandas.DataFrame(data=result_data, columns=["claim_id", "k", "mnDCG", "nDCG"])
