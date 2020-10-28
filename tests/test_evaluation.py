@@ -44,17 +44,18 @@ class MNDCGTests(unittest.TestCase):
         assert 0 <= score <= 1.
 
     def test_ndcg_score(self):
-        normal = ndcg_score_wrapper(
+        """Test ndcg score."""
+        score = ndcg_score_wrapper(
             y_pred=self.y_pred,
             data=self.data,
             k=self.k,
         )
-        modified = mndcg_score(
-            y_pred=self.y_pred,
-            data=self.data,
-            k=self.k,
-        )
-        assert modified <= normal
+
+        # check type
+        assert isinstance(score, float)
+
+        # check value range
+        assert 0 <= score <= 1.
 
     def test_mdcg_score_manual(self):
         """Test mdcg_score with a manual example."""
