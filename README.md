@@ -16,12 +16,12 @@ pip install -U -r requirements.txt
 
 ## Preprocessing
 You have to request the dataset from the authors and adjust the paths in [settings.py](src/arclus/settings.py)
-Step 1: Extract all claims, premises and the matching
+### Step 1: Extract all claims, premises and the matching
 ```bash
 PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/read_json.py --input_dir=... --output_dir=output/
 ```
 
-Step 2: Precompute bert-features for the claims, premises and claim-premise pairs (choices=['pair', 'claims', 'premises'])
+### Step 2: Precompute bert-features for the claims, premises and claim-premise pairs (choices=['pair', 'claims', 'premises'])
 ```bash
 PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/generate_features.py --mode=...
 ```
