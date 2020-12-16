@@ -28,9 +28,9 @@ PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/generate_features.p
 
 ### Step 3: Generate negative claim-premise pairs either [randomly](executables/preprocessing/generate_negative_samples.py) or based on [similarity](executables/preprocessing/generate_negative_samples_nn.py)
 ```bash
-Either
+#Either
 PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/generate_negative_samples_nn.py
-or
+#or
 PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/generate_negative_samples.py
 ```
 ### Step 4: Generate train-/test-/validation split
