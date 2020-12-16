@@ -26,6 +26,12 @@ PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/read_json.py --inpu
 PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/generate_features.py --mode=...
 ```
 
+### Step 3: Generate negative claim-premise pairs either randomly[executables/preprocessing/generate_negative_samples.py] or based on similarity[executables/preprocessing/generate_negative_samples_nn.py]
+```bash
+PYTHONPATH=src:$PYTHONPATH python3 executables/preprocessing/generate_features.py --mode=...
+```
+
+
 ## Execution
 ```bash
 PYTHONPATH=src:$PYTHONPATH python3 executables/evaluation/evaluate_baselines.py --force > output/output_energy.txt
