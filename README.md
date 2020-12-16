@@ -16,5 +16,5 @@ pip install -U -r requirements.txt
 
 Execution
 ```bash
-python evaluate_baselines.py
+PYTHONPATH=src:$PYTHONPATH python3 executables/evaluation/evaluate_baselines.py --force > output/output_energy.txt
 ```
