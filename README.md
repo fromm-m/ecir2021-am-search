@@ -1,6 +1,6 @@
 # Argument Clustering
 
-Accompanying repository of our [ECIR2021](https://arxiv.org/abs/2011.02177) paper "Diversity Aware Relevance Learning for Argument Search".
+Accompanying repository of our [ECIR2021](https://link.springer.com/chapter/10.1007/978-3-030-72240-1_24) Paper  "Diversity Aware Relevance Learning for Argument Search". [Arxiv](https://arxiv.org/abs/2011.02177)
 
 [![Python 3.8](https://img.shields.io/badge/Python-3.8-2d618c?logo=python)](https://docs.python.org/3.8/)
 [![PyTorch](https://img.shields.io/badge/Made%20with-PyTorch-ee4c2c?logo=pytorch)](https://pytorch.org/docs/stable/index.html)
